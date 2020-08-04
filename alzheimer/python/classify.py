@@ -5,19 +5,20 @@ Created on Thu Jul 30 17:16:20 2020
 @author: Administrator
 """
 
-
 #%% Import Packages
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (accuracy_score, confusion_matrix, precision_score,
                              recall_score, f1_score, roc_curve, precision_recall_curve)
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier)
+from sklearn.neighbors import KNeighborsClassifier
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-os.chdir("C:/Users/Administrator/wd/alzheimer")
+os.chdir("C:/Users/Administrator/wd/alzheimer/output_0804")
+
 
 #%% Read Data
 # dementia_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/man_data.csv",
@@ -31,12 +32,14 @@ dementia_dataframe_1 = dementia_dataframe_0.drop(["Sample", "coordinate_count"],
 features_dataframe = dementia_dataframe_1.drop("dementia", axis = 1)
 labels_dataframe = dementia_dataframe_1["dementia"]
 
+features_name = features_dataframe.columns
+
 (training_features_dataframe, validation_features_dataframe,
  training_labels_dataframe, validation_labels_dataframe) = train_test_split(
     features_dataframe, labels_dataframe, test_size = 0.25, random_state = 28)
 
 
-#%% Predict
+#%% Functions
 def score_fn(validation_labels, prediction_labels, file_name):
     confusion_matrix_0 = confusion_matrix(validation_labels, prediction_labels)
     
@@ -78,6 +81,7 @@ def draw_plot_fn(validation_labels, prediction_labels, file_name):
          label = "Precision")
     plt.plot(thresholds, recalls[0:threshold_boundary], label = "Recall")
     plt.savefig(file_name + "_Precision_Recall_Curve.png")
+    plt.close()
     
     # ROC curve
     fprs, tprs, thresholds = roc_curve(validation_labels, prediction_labels)
@@ -85,9 +89,10 @@ def draw_plot_fn(validation_labels, prediction_labels, file_name):
     plt.plot(fprs, tprs, label = "ROC")
     plt.plot([0, 1], [0, 1], "k--", label = "Random")
     plt.savefig(file_name + "_ROC_Curve.png")
+    plt.close()
 
 def prediction_fn(training_features, training_labels, validation_features,
-                  validation_labels, file_path):
+                  validation_labels):
     # Logistic Regression
     lr_clf = LogisticRegression()
     
@@ -100,7 +105,7 @@ def prediction_fn(training_features, training_labels, validation_features,
     
     # Coefficient
     coefficients = lr_clf.coef_
-    coefficient_dataframe = pd.DataFrame({"coordinate":features_dataframe,
+    coefficient_dataframe = pd.DataFrame({"coordinate":features_name,
                                        "coefficient":coefficients.tolist()[0]})
     coefficient_dataframe.to_csv("Logistic_Regression_Coefficient.csv",
                              index = False)
@@ -112,20 +117,45 @@ def prediction_fn(training_features, training_labels, validation_features,
 
     rf_pred = rf_clf.predict(validation_features)
     
-    score_fn(validation_labels, rf_pred, "Random Forest")
-    draw_plot_fn(validation_labels, rf_pred, "Random Forest")
+    score_fn(validation_labels, rf_pred, "Random_Forest")
+    draw_plot_fn(validation_labels, rf_pred, "Random_Forest")
     
     # Feature importances
     rf_feature_importances = rf_clf.feature_importances_
 
     indices = np.argsort(rf_feature_importances)[::-1][:10]
 
-    feature_importance_dataframe = pd.DataFrame({"coordinate":features_dataframe,
+    feature_importance_dataframe = pd.DataFrame({"coordinate":features_name,
                                              "feature_importance":rf_feature_importances})
-    feature_importance_dataframe.to_csv("C:/Users/Administrator/wd/alzheimer/Random_Forest_Feature_Importance.csv",
+    feature_importance_dataframe.to_csv("Random_Forest_Feature_Importance.csv",
                              index = False)
 
     plt.title("Feature Importances")
     plt.bar(range(len(indices)), rf_feature_importances[indices])
-    plt.xticks(range(len(indices)), [features_dataframe[i] for i in indices], rotation = -90)
-    plt.savefig("Random_Forest_Feature_Importance_Plot.png")
+    plt.xticks(range(len(indices)), [features_name[i] for i in indices], rotation = -90)
+    plt.savefig("Random_Forest_Feature_Importance_Plot.png", dpi = 300)
+    
+    # K NeighborsClassifier
+    kn_clf = KNeighborsClassifier()
+    
+    kn_clf.fit(training_features, training_labels)
+    
+    kn_pred = kn_clf.predict(validation_features)
+    
+    score_fn(validation_labels, kn_pred, "K_Neighbors")
+    draw_plot_fn(validation_labels, kn_pred, "K_Neighbors")
+    
+    # Gradient Boosting
+    gb_clf = GradientBoostingClassifier()
+    
+    gb_clf.fit(training_features, training_labels)
+    
+    gb_pred = gb_clf.predict(validation_features)
+    
+    score_fn(validation_labels, gb_pred, "Gradient_Boosting")
+    draw_plot_fn(validation_labels, gb_pred, "Gradient_Boosting")
+
+
+#%% Predict
+prediction_fn(training_features_dataframe, training_labels_dataframe,
+              validation_features_dataframe, validation_labels_dataframe)
