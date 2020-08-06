@@ -4,7 +4,7 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 library(tidyverse)
 
 
-# Manipulate Data ---------------------------------------------------------
+# Manipulate SNV Coordinate Data ---------------------------------------------------------
 d0 <- read_csv("data/data.csv")
 
 d1 <- d0 %>% 
@@ -95,24 +95,28 @@ sum_zero_coo_combn_dataframe <- coo_combn_dataframe[, 3:ncol(coo_combn_dataframe
 
 write_csv(sum_zero_coo_combn_dataframe, "data/zero_cordinate_combination_data.csv")
 
+sum_zero_coo_combn_dataframe <- read_csv("data/zero_cordinate_combination_data.csv")
+
 # Write non-zero coordinate combination data frame
 non_zero_coo_combn_dataframe <- coo_combn_dataframe %>% 
     select(-sum_zero_coo_combn_dataframe$combination_of_coordinate)
 
 write_csv(non_zero_coo_combn_dataframe, "data/non_zero_coordinate_combination_data.csv")
 
+non_zero_coo_combn_dataframe <- read_csv("non_zero_coordinate_combination_data.csv")
 
-# Master Data -------------------------------------------------------------
+
+# Manipulate Master Data -------------------------------------------------------------
 master_target_dataframe <- read_csv("data/master_target.csv")
 master_comparator_dataframe <- read_csv("data/master_comparator.csv",
                                         col_types = cols(MMSE = col_character(),
                                                          CDR = col_character(),
                                                          GDS = col_character()))
 
-level_of_education_dataframe <- data.frame(최종학력 = c(
+years_of_education_dataframe <- data.frame(최종학력 = c(
     "무학", "초중퇴", "초졸", "중중퇴", "중졸", "고중퇴", "고졸", "전문대졸",
     "전대졸", "초급대졸", "대중퇴", "대졸", "대학원졸", "석사"),
-    level_of_education = c(0, 3.5, 6, 7.5, 9, 10.5, 10.5, 10.5, 12, 14.5, 14,
+    years_of_education = c(0, 3.5, 6, 7.5, 9, 10.5, 10.5, 10.5, 12, 14.5, 14,
                            16, 18, 18))
 
 cardiac_disease_character <- paste0(
@@ -131,7 +135,9 @@ master_dataframe <- master_target_dataframe %>%
            Diabetes = ifelse(str_detect(병력, "당뇨|DM"), TRUE, FALSE),
            Hyperlipidemia = ifelse(str_detect(병력, "고지혈증|Hyperlipidemia"), TRUE, FALSE),
            Cardiac_disease = ifelse(str_detect(병력, cardiac_disease_character), TRUE, FALSE)) %>% 
-    left_join(level_of_education_dataframe,
+    left_join(years_of_education_dataframe,
               by = "최종학력")
 
 write_excel_csv(master_dataframe, "data/m_master_data.csv")
+
+master_dataframe <- read_csv("data/m_master_data.csv")
