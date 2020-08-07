@@ -99,7 +99,8 @@ sum_zero_coo_combn_dataframe <- read_csv("data/zero_cordinate_combination_data.c
 
 # Write non-zero coordinate combination data frame
 non_zero_coo_combn_dataframe <- coo_combn_dataframe %>% 
-    select(-sum_zero_coo_combn_dataframe$combination_of_coordinate)
+    select(-sum_zero_coo_combn_dataframe$combination_of_coordinate) %>% 
+    rename(ID = Sample)
 
 write_csv(non_zero_coo_combn_dataframe, "data/non_zero_coordinate_combination_data.csv")
 
@@ -120,9 +121,10 @@ years_of_education_dataframe <- data.frame(최종학력 = c(
                            16, 18, 18))
 
 cardiac_disease_character <- paste0(
-    "심부전|협심증|부정맥|심혈관|정맥혈전증|심근경색|스탠트|스텐드|심장약|심장|MI|CAOD|PTCA|",
+    "심부전|협심증|부정맥|심혈관|심근경색|스탠트|스텐드|심장약|심장|MI|CAOD|PTCA|",
     "Atrial tachycardia|Cardiomegaly|AMI|HF"
 )
+# 2020-08-07-Exclude phlebemphraxis
 
 master_dataframe <- master_target_dataframe %>% 
     mutate(Dementia = TRUE) %>% 
@@ -135,8 +137,13 @@ master_dataframe <- master_target_dataframe %>%
            Diabetes = ifelse(str_detect(병력, "당뇨|DM"), TRUE, FALSE),
            Hyperlipidemia = ifelse(str_detect(병력, "고지혈증|Hyperlipidemia"), TRUE, FALSE),
            Cardiac_disease = ifelse(str_detect(병력, cardiac_disease_character), TRUE, FALSE)) %>% 
+    rename(ID = No) %>% 
     left_join(years_of_education_dataframe,
-              by = "최종학력")
+              by = "최종학력") %>% 
+    full_join(non_zero_coo_combn_dataframe %>% 
+                  mutate(Source = ifelse(str_length(ID) == 8, 1, 2)),
+              by = "ID") %>% 
+    mutate(Source = ifelse(is.na(Source), 0, Source))
 
 write_excel_csv(master_dataframe, "data/m_master_data.csv")
 
