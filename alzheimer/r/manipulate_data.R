@@ -3,7 +3,7 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 
 library(tidyverse)
 library(lubridate)
-
+library(readxl)
 
 # Manipulate SNV Coordinate Data ---------------------------------------------------------
 d0 <- read_csv("data/data.csv")
@@ -14,14 +14,20 @@ d1 <- d0 %>%
     mutate(Coordinate = paste0("c_", Coordinate),
            coordinate_value = 1,
            dementia = ifelse(str_sub(Sample, 1, 1) == "N", 0, 1)) %>% 
-    spread(Coordinate, coordinate_value) %>% 
-    replace(is.na(.), 0) %>% 
+    spread(Coordinate, coordinate_value, fill = 0) %>% 
     mutate(coordinate_count = rowSums(.[3:ncol(.)]))
 
 write_csv(d1, "data/m_data.csv")
 
 d1 <- read_csv("data/m_data.csv")
 
+top3b_major_coo_dataframe <- d0 %>% 
+    select(Sample, Coordinate) %>% 
+    filter(Coordinate %in% c(22312315, 22312350, 22312351)) %>% 
+    mutate(Coordinate = paste0("presence_", Coordinate),
+           value = 1) %>% 
+    spread(Coordinate, value, fill = 0) %>% 
+    rename(ID = Sample)
 
 # Extract Distinct Coordinate ---------------------------------------------
 distinct_coordinate <- d0 %>% 
@@ -128,9 +134,9 @@ cardiac_disease_character <- paste0(
 # 2020-08-07-Exclude phlebemphraxis
 
 master_dataframe <- master_target_dataframe %>% 
-    mutate(Dementia = TRUE) %>% 
+    mutate(Dementia_a = TRUE) %>% 
     bind_rows(master_comparator_dataframe %>% 
-                  mutate(Dementia = FALSE)) %>% 
+                  mutate(Dementia_a = FALSE)) %>% 
     mutate(Smoking = ifelse(str_detect(흡연, "O") | str_detect(흡연, "P"), TRUE, FALSE),
            Family_history_of_dementia = ifelse(str_detect(치매가족력, "N") | str_detect(치매가족력, "X"), FALSE, TRUE),
            ApoE_E4 = ifelse(str_detect(ApoE, "E4"), TRUE, FALSE),
@@ -141,10 +147,20 @@ master_dataframe <- master_target_dataframe %>%
     rename(ID = No) %>% 
     left_join(years_of_education_dataframe,
               by = "최종학력") %>% 
-    full_join(non_zero_coo_combn_dataframe %>% 
+    full_join(top3b_major_coo_dataframe,
+              by = "ID") %>% 
+    left_join(non_zero_coo_combn_dataframe %>% 
                   mutate(Source = ifelse(str_length(ID) == 8, 1, 2)),
               by = "ID") %>% 
-    mutate(Source = ifelse(is.na(Source), 0, Source))
+    mutate(Source = ifelse(is.na(Source), 0, Source),
+           Dementia = ifelse((!is.na(Dementia_a) & Dementia_a == TRUE) |
+                                 (!is.na(dementia) & dementia == 1), TRUE,
+                             ifelse((!is.na(Dementia_a) & Dementia_a == FALSE) |
+                                        (!is.na(dementia) & dementia == 0), FALSE, NA))) %>% 
+    select(-c(Dementia_a, dementia)) %>% 
+    relocate(Dementia, .after = presence_22312351) %>% 
+    relocate(Source, .before = presence_22312315) %>% 
+    drop_na(ID)
 
 write_excel_csv(master_dataframe, "data/m_master_data.csv")
 
@@ -258,3 +274,23 @@ observation_table_2 <- master_dataframe %>%
     relocate(observation_date, .after = observation_concept)
 
 write_csv(observation_table_2, "data/mariadb/observation_table_2.csv")
+
+
+# Manipulate ApoE Data ----------------------------------------------------
+apoe_outcome_dataframe <- data.frame()
+
+for (i in list.files("data/raw/NGS_result", full.names = TRUE)) {
+    apoe_tmp_dataframe <- read_excel(i) %>% 
+        select(Gene, Variant, Coordinate, Genotype, Exonic, Consequence) %>% 
+        filter(Gene == "APOE") %>% 
+        mutate(ID = str_extract(i, "(N|P)-\\d+"))
+    
+    apoe_outcome_dataframe <- bind_rows(apoe_outcome_dataframe, apoe_tmp_dataframe)
+}
+
+apoe_outcome_dataframe <- apoe_outcome_dataframe %>% 
+    left_join(read_csv("data/APOE_genotyping_data.csv") %>% 
+                  rename(ID = No., Genotype_detail = APOE),
+              by = "ID")
+
+write_csv(apoe_outcome_dataframe, "data/m_apoe_data.csv")
