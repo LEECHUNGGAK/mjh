@@ -17,26 +17,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-os.chdir("C:/Users/Administrator/wd/alzheimer/output_0804")
+path = "C:/Users/Administrator/wd/alzheimer/output_apoe"
 
-
-#%% Read Data
-# dementia_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/man_data.csv",
-#                                    sep = ",")
-
-dementia_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/non_zero_coordinate_combination_data.csv",
-                                 sep = ",")
-
-dementia_dataframe_1 = dementia_dataframe_0.drop(["Sample", "coordinate_count"], axis = 1)
-
-features_dataframe = dementia_dataframe_1.drop("dementia", axis = 1)
-labels_dataframe = dementia_dataframe_1["dementia"]
-
-features_name = features_dataframe.columns
-
-(training_features_dataframe, validation_features_dataframe,
- training_labels_dataframe, validation_labels_dataframe) = train_test_split(
-    features_dataframe, labels_dataframe, test_size = 0.25, random_state = 28)
+if not os.path.isdir(path):
+    os.mkdir(path)
+    
+os.chdir(path)
 
 
 #%% Functions
@@ -91,8 +77,15 @@ def draw_plot_fn(validation_labels, prediction_labels, file_name):
     plt.savefig(file_name + "_ROC_Curve.png")
     plt.close()
 
-def prediction_fn(training_features, training_labels, validation_features,
-                  validation_labels):
+def prediction_fn(features, labels):
+    features_name = features.columns
+    
+    # Train test split
+    (training_features, validation_features,
+     training_labels, validation_labels) = train_test_split(
+    features, labels, test_size = 0.25, random_state = 28
+    )
+     
     # Logistic Regression
     lr_clf = LogisticRegression()
     
@@ -156,6 +149,25 @@ def prediction_fn(training_features, training_labels, validation_features,
     draw_plot_fn(validation_labels, gb_pred, "Gradient_Boosting")
 
 
-#%% Predict
-prediction_fn(training_features_dataframe, training_labels_dataframe,
-              validation_features_dataframe, validation_labels_dataframe)
+#%% TOP3B Predict
+top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/non_zero_coordinate_combination_data.csv",
+                                 sep = ",")
+
+top3b_dataframe_1 = top3b_dataframe_0.drop(["Sample", "coordinate_count"], axis = 1)
+
+features_dataframe = top3b_dataframe_1.drop("dementia", axis = 1)
+labels_dataframe = top3b_dataframe_1["dementia"]
+
+prediction_fn(features_dataframe, labels_dataframe)
+
+
+#%% APOE Predict
+apoe_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/m_apoe_dataframe.csv",
+                                 sep = ",")
+
+apoe_dataframe_1 = apoe_dataframe_0.drop("ID", axis = 1)
+
+features_dataframe = apoe_dataframe_1.drop("dementia", axis = 1)
+labels_dataframe = apoe_dataframe_1["dementia"]
+
+prediction_fn(features_dataframe, labels_dataframe)
