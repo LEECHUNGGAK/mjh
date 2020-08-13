@@ -46,7 +46,7 @@ def score_fn(validation_labels, prediction_labels, file_name):
     
     score_datafarme = pd.DataFrame({
         "Score":["Accuracy", "Precision", "Recall", "F1 Score",
-                 "True Negatvie Rate", "Negatvie Predictive Value"], 
+                 "True Negatvie Rate", "Negative Predictive Value"], 
         "Value":[accuracy_score(validation_labels,prediction_labels), 
                  precision_score(validation_labels, prediction_labels),
                  recall_score(validation_labels, prediction_labels),
@@ -126,7 +126,9 @@ def prediction_fn(features, labels):
     plt.title("Feature Importances")
     plt.bar(range(len(indices)), rf_feature_importances[indices])
     plt.xticks(range(len(indices)), [features_name[i] for i in indices], rotation = -90)
-    plt.savefig("Random_Forest_Feature_Importance_Plot.png", dpi = 300)
+    plt.tight_layout()
+    plt.savefig("Random_Forest_Feature_Importance_Plot.png", dpi = 300,
+                )
     
     # K NeighborsClassifier
     kn_clf = KNeighborsClassifier()
