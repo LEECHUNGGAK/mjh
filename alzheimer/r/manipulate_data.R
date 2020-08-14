@@ -4,8 +4,10 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 library(tidyverse)
 library(lubridate)
 library(readxl)
+library(data.table)
 
-# Manipulate SNV Coordinate Data ---------------------------------------------------------
+
+# Manipulate TOP3B SNV Coordinate Data ---------------------------------------------------------
 d0 <- read_csv("data/data.csv")
 
 d1 <- d0 %>% 
@@ -277,7 +279,7 @@ write_csv(observation_table_2, "data/mariadb/observation_table_2.csv")
 
 
 # Manipulate ApoE Data ----------------------------------------------------
-apoe_outcome_dataframe <- data.frame()
+apoe_dataframe <- data.frame()
 
 for (i in list.files("data/raw/NGS_result", full.names = TRUE)) {
     apoe_tmp_dataframe <- read_excel(i) %>% 
@@ -285,12 +287,67 @@ for (i in list.files("data/raw/NGS_result", full.names = TRUE)) {
         filter(Gene == "APOE") %>% 
         mutate(ID = str_extract(i, "(N|P)-\\d+"))
     
-    apoe_outcome_dataframe <- bind_rows(apoe_outcome_dataframe, apoe_tmp_dataframe)
+    apoe_dataframe <- bind_rows(apoe_dataframe, apoe_tmp_dataframe)
 }
 
-apoe_outcome_dataframe <- apoe_outcome_dataframe %>% 
-    left_join(read_csv("data/APOE_genotyping_data.csv") %>% 
+m_apoe_dataframe <- apoe_dataframe %>% 
+    left_join(read_csv("data/material/APOE_genotyping_data.csv") %>% 
                   rename(ID = No., Genotype_detail = APOE),
-              by = "ID")
+              by = "ID") %>% 
+    mutate(dementia = ifelse(str_sub(ID, 1, 1) == "N", 0, 1))
 
-write_csv(apoe_outcome_dataframe, "data/m_apoe_data.csv")
+write_csv(m_apoe_dataframe, "data/m_apoe_data.csv")
+
+m_apoe_dataframe <- read_csv("data/m_apoe_data.csv")
+
+# Pivot wider
+long_apoe_dataframe <- m_apoe_dataframe %>% 
+    select(ID, Coordinate, dementia) %>% 
+    distinct() %>% 
+    mutate(Coordinate = paste0("c_", Coordinate),
+           Coordinate_value = 1) %>% 
+    spread(key = Coordinate, value = Coordinate_value, fill = 0)
+
+write_csv(m_apoe_dataframe, "data/long_apoe_dataframe.csv")
+
+
+# Create ApoE Plot --------------------------------------------------------
+plot_dataframe <- m_apoe_dataframe %>% 
+    select(ID, Coordinate, dementia) %>% 
+    mutate(dementia = recode(dementia, `1` = TRUE, `0` = FALSE)) %>% 
+    # recode function does not work on numeric vector. Use grave accent.
+    distinct() %>% 
+    group_by(dementia, Coordinate) %>% 
+    summarize(n = n()) %>% 
+    mutate(Coordinate = as.character(Coordinate)) %>%
+    group_by(Coordinate) %>% 
+    mutate(proportion = n / sum(n)) %>% 
+    as.data.table()
+
+asterisk_dataframe <- plot_dataframe %>% 
+    select(-n) %>% 
+    spread(key = dementia, value = proportion) %>% 
+    replace(is.na(.), 0) %>% 
+    rename(normal_prop = 2, patient_prop = 3) %>% 
+    mutate(asterisk = patient_prop > normal_prop)
+
+apoe_plot <- ggplot(data = plot_dataframe, aes(x = reorder(Coordinate, -n), y = n, fill = dementia)) +
+    geom_bar(stat = "identity", position = "stack") +
+    geom_text(aes(label = round(proportion, 2)), position = position_stack(vjust = 0.5)) +
+    labs(x = "Coordinate", y = "The Number of Patients")
+
+for (i in 1:nrow(asterisk_dataframe)) {
+    if (asterisk_dataframe$asterisk[i] == TRUE) {
+        coordinate <- asterisk_dataframe$Coordinate[i]
+        apoe_plot <- apoe_plot +
+            annotate("text",
+                     x = coordinate,
+                     y = plot_dataframe[Coordinate == coordinate, sum(n)] + 5,
+                     label = "*")
+    }
+}
+ggsave("ApoE_Count_by_Coordinate.png", apoe_plot)
+
+# ApoE Count by Patient ------------------------------------------------
+
+
