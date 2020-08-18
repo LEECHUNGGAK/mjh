@@ -8,7 +8,7 @@ library(data.table)
 
 
 # Manipulate TOP3B SNV Coordinate Data ---------------------------------------------------------
-d0 <- read_csv("data/data.csv")
+d0 <- read_csv("data/material/data.csv")
 
 d1 <- d0 %>% 
     select(Sample, Coordinate) %>% 
@@ -31,7 +31,11 @@ top3b_major_coo_dataframe <- d0 %>%
     spread(Coordinate, value, fill = 0) %>% 
     rename(ID = Sample)
 
-# Extract Distinct Coordinate ---------------------------------------------
+write_csv(top3b_major_coo_dataframe, "data/top3b_major_coordinate.csv")
+
+top3b_major_coo_dataframe <- read_csv("data/top3b_major_coordinate.csv")
+
+# Extract Distinct Coordinate
 distinct_coordinate <- d0 %>% 
     distinct(Coordinate)
 
@@ -39,8 +43,7 @@ write_csv(distinct_coordinate, "data/distinct_coordinate.csv")
 
 distinct_coordinate <- read_csv("data/distinct_coordinate.csv")
 
-
-# Draw a Graph: The Sum of Coordinate Count by the Patient ------------------------------
+# Draw a Graph: The Sum of Coordinate Count by the Patient
 d1 %>%
     group_by(coordinate_count) %>% 
     summarize(n = n()) %>% 
@@ -50,8 +53,7 @@ d1 %>%
     scale_x_continuous(breaks = 1:max(d1$coordinate_count))
 ggsave("The_Sum_of_Coordinate_Count.png")
 
-
-# The Number of Patients by Coordinate Combination ------------------------
+# The Number of Patients by Coordinate Combination
 coo_combn_dataframe <- d1
 
 for (var_choose in 3:1) {
@@ -116,39 +118,60 @@ write_csv(non_zero_coo_combn_dataframe, "data/non_zero_coordinate_combination_da
 non_zero_coo_combn_dataframe <- read_csv("data/non_zero_coordinate_combination_data.csv")
 
 
+# Function; process_master_data -------------------------------------------
+process_master_data <- function(master_data,
+                                years_of_education = FALSE) {
+    cardiac_disease_character <- paste0(
+        "심부전|협심증|부정맥|심혈관|심근경색|스탠트|스텐드|심장약|심장|MI|CAOD|PTCA|",
+        "Atrial tachycardia|Cardiomegaly|AMI|HF"
+    )
+    # 2020-08-07: Exclude phlebemphraxis
+    
+    years_of_education_df <- data.frame(
+        최종학력 = c("무학", "초중퇴", "초졸", "중중퇴", "중졸", "고중퇴",
+                 "고졸", "전문대졸", "전대졸", "초급대졸", "대중퇴", "대졸",
+                 "대학원졸", "석사"),
+        years_of_education = c(0, 3.5, 6, 7.5, 9, 10.5, 10.5, 10.5, 12, 14.5,
+                               14, 16, 18, 18)
+    )
+    
+    result <- master_data %>% 
+        mutate(smoking = ifelse(str_detect(흡연, "O|P|Current smoker"), TRUE, FALSE),
+               family_history_of_dementia = ifelse(str_detect(치매가족력, "N|X|없음"), FALSE, TRUE),
+               apoe_e4 = ifelse(str_detect(ApoE, "E4"), TRUE, FALSE),
+               hypertension = ifelse(str_detect(병력, "고혈압|혈압약|HTN"), TRUE, FALSE),
+               diabetes = ifelse(str_detect(병력, "당뇨|DM"), TRUE, FALSE),
+               hyperlipidemia = ifelse(str_detect(병력, "고지혈증|Hyperlipidemia"), TRUE, FALSE),
+               cardiac_disease = ifelse(str_detect(병력, cardiac_disease_character), TRUE, FALSE),
+               stroke = ifelse(str_detect(병력, "뇌졸중"), TRUE, FALSE))
+    # 2020-08-17: Add stroke column
+    
+    if (years_of_education) {
+        result <- result %>% 
+            left_join(years_of_education_df,
+                      by = "최종학력")
+    }
+    
+    return(result)
+}
+
+
 # Manipulate Master Data -------------------------------------------------------------
-master_target_dataframe <- read_csv("data/master_target.csv")
-master_comparator_dataframe <- read_csv("data/master_comparator.csv",
+master_target_dataframe <- read_csv("data/material/master_target.csv")
+master_comparator_dataframe <- read_csv("data/material/master_comparator.csv",
                                         col_types = cols(MMSE = col_character(),
                                                          CDR = col_character(),
                                                          GDS = col_character()))
 
-years_of_education_dataframe <- data.frame(최종학력 = c(
-    "무학", "초중퇴", "초졸", "중중퇴", "중졸", "고중퇴", "고졸", "전문대졸",
-    "전대졸", "초급대졸", "대중퇴", "대졸", "대학원졸", "석사"),
-    years_of_education = c(0, 3.5, 6, 7.5, 9, 10.5, 10.5, 10.5, 12, 14.5, 14,
-                           16, 18, 18))
-
-cardiac_disease_character <- paste0(
-    "심부전|협심증|부정맥|심혈관|심근경색|스탠트|스텐드|심장약|심장|MI|CAOD|PTCA|",
-    "Atrial tachycardia|Cardiomegaly|AMI|HF"
-)
-# 2020-08-07-Exclude phlebemphraxis
-
 master_dataframe <- master_target_dataframe %>% 
     mutate(Dementia_a = TRUE) %>% 
     bind_rows(master_comparator_dataframe %>% 
-                  mutate(Dementia_a = FALSE)) %>% 
-    mutate(Smoking = ifelse(str_detect(흡연, "O") | str_detect(흡연, "P"), TRUE, FALSE),
-           Family_history_of_dementia = ifelse(str_detect(치매가족력, "N") | str_detect(치매가족력, "X"), FALSE, TRUE),
-           ApoE_E4 = ifelse(str_detect(ApoE, "E4"), TRUE, FALSE),
-           Hypertension = ifelse(str_detect(병력, "고혈압|혈압약|HTN"), TRUE, FALSE),
-           Diabetes = ifelse(str_detect(병력, "당뇨|DM"), TRUE, FALSE),
-           Hyperlipidemia = ifelse(str_detect(병력, "고지혈증|Hyperlipidemia"), TRUE, FALSE),
-           Cardiac_disease = ifelse(str_detect(병력, cardiac_disease_character), TRUE, FALSE)) %>% 
+                  mutate(Dementia_a = FALSE))
+
+master_dataframe <- process_master_data(master_dataframe)
+
+master_dataframe <- master_dataframe %>% 
     rename(ID = No) %>% 
-    left_join(years_of_education_dataframe,
-              by = "최종학력") %>% 
     full_join(top3b_major_coo_dataframe,
               by = "ID") %>% 
     left_join(non_zero_coo_combn_dataframe %>% 
@@ -164,118 +187,59 @@ master_dataframe <- master_target_dataframe %>%
     relocate(Source, .before = presence_22312315) %>% 
     drop_na(ID)
 
-write_excel_csv(master_dataframe, "data/m_master_data.csv")
+# write_excel_csv(master_dataframe, "data/master_data.csv")
 
-master_dataframe <- read_csv("data/m_master_data.csv")
+master_dataframe <- read_csv("data/master_data.csv")
 
+# Master Data Type 2
+# Exclude combinations of coordinate
+master_df_t2 <- master_target_dataframe %>% 
+    bind_rows(master_comparator_dataframe)
 
-# Insert Data into MariaDB ------------------------------------------------
-# Person
-person_table <- master_dataframe %>% 
-    select(병록번호, 성별, 생년월일) %>% 
-    rename(person_id = 1,
-           gender = 2,
-           birth_date = 3) %>% 
-    drop_na(person_id) %>% 
-    mutate(gender = ifelse(gender == "M", "Male", "Female"))
+master_df_t2 <- process_master_data(master_df_t2,
+                                    years_of_education = TRUE)
 
-write_csv(person_table, "data/mariadb/person_table.csv", na = "NULL")
+master_df_t2 <- master_df_t2 %>% 
+    rename(ID = No) %>% 
+    full_join(top3b_major_coo_dataframe,
+              by = "ID") %>% 
+    mutate(dementia = ifelse(str_sub(ID, 1, 1) == "N", 0, 1)) %>% 
+    relocate(dementia, .after = presence_22312351) %>% 
+    drop_na(ID)
 
-# Measurement
-## MMSE
-measurement_table <- master_dataframe %>% 
-    select(병록번호, MMSE, `MMSE 시행날짜`) %>% 
-    separate_rows(MMSE, `MMSE 시행날짜`, sep = "\n") %>% 
-    mutate(measurement_concept = "Mini mental test examination",
-           measurement_date = ymd(`MMSE 시행날짜`)) %>% 
-    select(-`MMSE 시행날짜`) %>% 
-    rename(person_id = 병록번호,
-           value_as_number = MMSE) %>%
-    ## CDR
-    bind_rows(master_dataframe %>% 
-                  select(병록번호, CDR, `CDR 시행날짜`) %>% 
-                  separate_rows(CDR, `CDR 시행날짜`, sep = "\n") %>% 
-                  mutate(measurement_concept = "Clinical dementia rating",
-                         measurement_date = ymd(`CDR 시행날짜`)) %>% 
-                  select(-`CDR 시행날짜`) %>% 
-                  rename(person_id = 병록번호,
-                         value_as_number = CDR)) %>% 
-    ## CDR-sum of boxes
-    bind_rows(master_dataframe %>% 
-                  select(병록번호, `CDR_Sum of box`, `CDR 시행날짜`) %>% 
-                  separate_rows(`CDR_Sum of box`, `CDR 시행날짜`, sep = "\n") %>% 
-                  mutate(measurement_concept = "Clinical dementia rating-sum of boxes",
-                         measurement_date = ymd(`CDR 시행날짜`)) %>% 
-                  select(-`CDR 시행날짜`) %>% 
-                  rename(person_id = 병록번호,
-                         value_as_number = `CDR_Sum of box`)) %>% 
-    ## GDR
-    bind_rows(master_dataframe %>% 
-                  select(병록번호, 최근신경인지검사일, GDS) %>% 
-                  separate_rows(최근신경인지검사일, GDS, sep = "\n") %>% 
-                  mutate(measurement_concept = "Geriatric depression scale",
-                         measurement_date = ymd(최근신경인지검사일)) %>% 
-                  select(-최근신경인지검사일) %>% 
-                  rename(person_id = 병록번호,
-                         value_as_number = GDS)) %>% 
-    drop_na() %>%
-    filter(value_as_number != "ND") %>% 
-    relocate(person_id, measurement_concept, measurement_date, value_as_number)
+write_excel_csv(master_df_t2, "data/master_data_t2.csv")
 
-write_csv(measurement_table, "data/mariadb/measurement_table.csv")
+master_df_t2 <- read_csv("data/master_data_t2.csv")
 
-## Height, Weight, SBP, DBP, Pulse rate
-measurement_table_2 <- master_dataframe %>% 
-    select(병록번호, 등재일, 키, 체중, SBP, DBP, 맥박) %>% 
-    rename(Height = 키, Weight = 체중, `Systolic blood pressure` = SBP,
-           `Diastolic blood pressure` = DBP, `Pulse rate` = 맥박,
-           measurement_date = 등재일, person_id = 병록번호) %>% 
-    gather(key = measurement_concept, value = value_as_number,
-           Height, Weight, `Systolic blood pressure`, `Diastolic blood pressure`,
-           `Pulse rate`) %>% 
-    drop_na() %>% 
-    relocate(measurement_date, .after = measurement_concept)
+# Bind rows cancerrop Data
+cancerrop_df <- read_csv("data/material/cancerrop_patient.csv") %>% 
+    rename(`치매 약물` = 33) %>% 
+    mutate(dementia = 1) %>% 
+    bind_rows(read_csv("data/material/cancerrop_normal.csv",
+                       col_types = cols(최근신경인지검사일 = col_character(),
+                                                 MMSE = col_character(),
+                                                 CDR = col_character(),
+                                                 `CDR_Sum of box` = col_character(),
+                                                 GDS = col_character(),
+                                                 최근PET검사일 = col_date())) %>% 
+                  mutate(dementia = 0) %>% 
+                  rename(최근CT검사일 = CT검사일,
+                         최근MRI검사일 = MRI검사일)) %>% 
+    mutate(생년월일 = ymd(paste0("19", 생년월일)),
+               외래방문일자 = as.character(외래방문일자),
+               최근CT검사일 = as.character(최근CT검사일),
+               최근MRI검사일 = as.character(최근MRI검사일),
+               최근PET검사일 = as.character(최근PET검사일),
+               최종학력 = as.character(최종학력)) %>% 
+    drop_na(No) %>% 
+    rename(ID = No)
 
-write_csv(measurement_table_2, "data/mariadb/measurement_table_2.csv")
+cancerrop_df <- process_master_data(cancerrop_df)
 
-## Observation - value_as_string
-observation_concenpt_dataframe <- data.frame(
-    observation_concept = c("Family_history_of_dementia", "Smoking",
-                            "Hypertension", "Diabetes", "Hyperlipidemia",
-                            "Cardiac_disease"),
-    value_as_string = c("Dementia", "TRUE", "Hypertension", "Diabetes",
-                        "Hyperlipidemia", "Cardiac disease")
-)
+master_df_t2_v2 <- master_df_t2 %>% 
+    bind_rows(cancerrop_df)
 
-observation_table <- master_dataframe %>% 
-    select(병록번호, 등재일, Family_history_of_dementia, Smoking, Hypertension,
-               Diabetes, Hyperlipidemia, Cardiac_disease) %>% 
-    gather(key = observation_concept, value = value,
-           Family_history_of_dementia, Smoking, Hypertension, Diabetes,
-           Hyperlipidemia, Cardiac_disease) %>% 
-    rename(person_id = 병록번호, observation_date = 등재일) %>% 
-    filter(!is.na(person_id) & value == TRUE) %>% 
-    left_join(observation_concenpt_dataframe, by = "observation_concept") %>% 
-    mutate(observation_concept = ifelse(
-        observation_concept == "Family_history_of_dementia", "Family history", 
-        ifelse(observation_concept == "Smoking", "Smoking", "Past history")
-    )) %>% 
-    select(-value) %>% 
-    relocate(observation_date, .after = observation_concept)
-
-write_csv(observation_table, "data/mariadb/observation_table.csv")
-
-## Observation - value_as_number
-observation_table_2 <- master_dataframe %>% 
-    select(병록번호, 등재일, years_of_education) %>% 
-    gather(key = observation_concept, value = value_as_number,
-           years_of_education) %>% 
-    drop_na() %>% 
-    mutate(observation_concept = "Years of education") %>% 
-    rename(person_id = 병록번호, observation_date = 등재일) %>% 
-    relocate(observation_date, .after = observation_concept)
-
-write_csv(observation_table_2, "data/mariadb/observation_table_2.csv")
+write_excel_csv(master_df_t2_v2, "data/master_data_t2_v2.csv")
 
 
 # Manipulate ApoE Data ----------------------------------------------------
@@ -308,14 +272,14 @@ long_apoe_dataframe <- m_apoe_dataframe %>%
            Coordinate_value = 1) %>% 
     spread(key = Coordinate, value = Coordinate_value, fill = 0)
 
-write_csv(m_apoe_dataframe, "data/long_apoe_dataframe.csv")
+write_csv(long_apoe_dataframe, "data/long_apoe_data.csv")
 
 
 # Create ApoE Plot --------------------------------------------------------
 plot_dataframe <- m_apoe_dataframe %>% 
     select(ID, Coordinate, dementia) %>% 
     mutate(dementia = recode(dementia, `1` = TRUE, `0` = FALSE)) %>% 
-    # recode function does not work on numeric vector. Use grave accent.
+    # Recode function does not work on numeric vector. Use grave accent.
     distinct() %>% 
     group_by(dementia, Coordinate) %>% 
     summarize(n = n()) %>% 
@@ -348,6 +312,27 @@ for (i in 1:nrow(asterisk_dataframe)) {
 }
 ggsave("ApoE_Count_by_Coordinate.png", apoe_plot)
 
-# ApoE Count by Patient ------------------------------------------------
 
+# Preprocess Karyotype Data ------------------------------------------------
+karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>% 
+    bind_rows(read_csv("data/material/karyotype_normal.csv")) %>% 
+    mutate(의뢰날짜 = ymd(의뢰날짜)) %>% 
+    select(의뢰날짜, 관리번호, 식별코드, `성염색체 이상 =1`,
+               `Turner 45X`, XXX, `상염색체 이상`) %>% 
+    rename(request_date = 1,
+           management_number = 2,
+           ID = 3,
+           abnormal_sex_chromosome = 4,
+           turner = 5,
+           xxx = 6,
+           abnormal_autosome = 7) %>% 
+    replace_na(list(abnormal_sex_chromosome = 0,
+                    abnormal_autosome = 0,
+                    turner = 0,
+                    xxx = 0))
 
+master_df_t2_v3 <- master_df_t2_v2 %>% 
+    left_join(karyotype_dataframe,
+              by = "ID")
+
+write_excel_csv(master_df_t2_v3, "data/master_data_t2_v3.csv")
