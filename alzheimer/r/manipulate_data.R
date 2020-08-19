@@ -317,16 +317,18 @@ ggsave("ApoE_Count_by_Coordinate.png", apoe_plot)
 karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>% 
     bind_rows(read_csv("data/material/karyotype_normal.csv")) %>% 
     mutate(의뢰날짜 = ymd(의뢰날짜)) %>% 
-    select(의뢰날짜, 관리번호, 식별코드, `성염색체 이상 =1`,
+    select(의뢰날짜, 관리번호, 식별코드, `결과 정상=0, 염색체 (상염색체, 성염색체)이상 =1`, `성염색체 이상 =1`,
                `Turner 45X`, XXX, `상염색체 이상`) %>% 
     rename(request_date = 1,
            management_number = 2,
            ID = 3,
-           abnormal_sex_chromosome = 4,
-           turner = 5,
-           xxx = 6,
-           abnormal_autosome = 7) %>% 
-    replace_na(list(abnormal_sex_chromosome = 0,
+           abnormal_chromosome = 4,
+           abnormal_sex_chromosome = 5,
+           turner = 6,
+           xxx = 7,
+           abnormal_autosome = 8) %>% 
+    replace_na(list(abnormal_chromosome = 0,
+                    abnormal_sex_chromosome = 0,
                     abnormal_autosome = 0,
                     turner = 0,
                     xxx = 0))
@@ -336,3 +338,28 @@ master_df_t2_v3 <- master_df_t2_v2 %>%
               by = "ID")
 
 write_excel_csv(master_df_t2_v3, "data/master_data_t2_v3.csv")
+
+master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv")
+
+# Preprocess Chip Data ------------------------------------------------------
+chip_df <- read_csv("data/material/chip_patient.csv") %>%
+    bind_rows(read_csv("data/material/chip_normal.csv")) %>% 
+    rename(chip_abnormal_autosome = `상염색체 이상 =1`,
+           chip_abnormal_sex_chromosome = `성염색체 이상=1`,
+           chip_abnormal_chromosome = `염색체 이상 (상염색체, 성염색체)=1`,
+           management_number = 관리번호,
+           ID = 식별코드) %>% 
+    replace_na(list(chip_abnormal_sex_chromosome = 0,
+                    chip_abnormal_autosome = 0,
+                    chip_abnormal_chromosome = 0)) %>% 
+    select(-c(No., 의뢰날짜, 대리점, 의료기관명, 수진자명, `성별/나이`,
+              검체종류, 기타기록사항))
+
+master_df_t2_v4 <- master_df_t2_v3 %>% 
+    left_join(chip_df,
+              by = c("ID", "management_number")) %>% 
+    rename(registration_date = 등재일,
+           mmse_date = `MMSE 시행날짜`,
+           cdr_date = `CDR 시행날짜`)
+
+write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
