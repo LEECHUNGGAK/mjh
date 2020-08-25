@@ -326,8 +326,8 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
                karyotype = TRUE,
                식별코드 = str_replace(식별코드, "_", "-")) %>% 
     select(의뢰날짜, 관리번호, 식별코드, `결과 정상=0, 염색체 (상염색체, 성염색체)이상 =1`, `성염색체 이상 =1`,
-               `Turner 45X`, XXX, `상염색체 이상`) %>% 
-    rename(request_date = 1,
+               `Turner 45X`, XXX, `상염색체 이상=1`) %>% 
+    rename(registration_date = 1,
            management_number = 2,
            ID = 3,
            abnormal_chromosome = 4,
@@ -342,9 +342,19 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
                     xxx = 0))
 
 master_df_t2_v3 <- master_df_t2_v2 %>% 
+    rename(registration_date = 등재일) %>% 
     left_join(karyotype_dataframe %>% 
                   mutate(karyotype = TRUE),
-              by = "ID")
+              by = "ID") %>% 
+    mutate(registration_date.x = ifelse(is.na(registration_date.x),
+                                        registration_date.y,
+                                        registration_date.x)) %>% 
+    rename(registration_date = registration_date.x,
+           mmse_date = `MMSE 시행날짜`,
+           cdr_date = `CDR 시행날짜`,
+           cdr_sum_of_box = `CDR_Sum of box`) %>% 
+    mutate(registration_date = as.Date(registration_date, origin = "1970-01-01")) %>% 
+    select(-registration_date.y)
 
 write_excel_csv(master_df_t2_v3, "data/master_data_t2_v3.csv")
 
@@ -356,26 +366,31 @@ chip_df <- read_csv("data/material/chip_patient.csv") %>%
     bind_rows(read_csv("data/material/chip_normal.csv") %>% 
                   rename(chip_abnormal_chromosome = `염색체(상염색체, 성염색체) 이상 =1`)) %>%
     mutate(식별코드 = str_replace(식별코드, "_", "-")) %>% 
-    rename(의뢰날짜 = `의뢰\n날짜`,
-               `농도 (ng/ul)` = `농도 \n(ng/ul)`,
-               `DNA농도(ng)` = `DNA농도\n(ng)`,
-               chip_abnormal_autosome = `상염색체 이상 =1`,
-               chip_abnormal_sex_chromosome = `성염색체 이상=1`,
-               management_number = 관리번호,
-               ID = 식별코드) %>% 
+    rename(registration_date = `의뢰\n날짜`,
+           `농도 (ng/ul)` = `농도 \n(ng/ul)`,
+           `DNA농도(ng)` = `DNA농도\n(ng)`,
+           chip_abnormal_autosome = `상염색체 이상 =1`,
+           chip_abnormal_sex_chromosome = `성염색체 이상=1`,
+           management_number = 관리번호,
+           ID = 식별코드) %>% 
     replace_na(list(chip_abnormal_sex_chromosome = 0,
                     chip_abnormal_autosome = 0,
                     chip_abnormal_chromosome = 0)) %>% 
-    select(-c(No., 의뢰날짜, 대리점, 의료기관명, 수진자명, `성별/나이`,
-              `정상or 환자`, 기타기록사항))
+    select(-c(No., 대리점, 의료기관명, 수진자명, `성별/나이`, `정상or 환자`,
+              기타기록사항))
 
 master_df_t2_v4 <- master_df_t2_v3 %>% 
     left_join(chip_df %>% 
                   mutate(chip = TRUE),
               by = "ID") %>% 
-    rename(registration_date = 등재일,
-           mmse_date = `MMSE 시행날짜`,
+    rename(mmse_date = `MMSE 시행날짜`,
            cdr_date = `CDR 시행날짜`,
-           cdr_sum_of_box = `CDR_Sum of box`)
+           cdr_sum_of_box = `CDR_Sum of box`) %>% 
+    mutate(registration_date.x = ifelse(is.na(registration_date.x),
+                                        registration_date.y,
+                                        registration_date.x)) %>% 
+    rename(registration_date = registration_date.x) %>% 
+    mutate(registration_date = as.Date(registration_date, origin = "1970-01-01")) %>% 
+    select(-registration_date.y)
 
 write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
