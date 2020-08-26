@@ -28,9 +28,12 @@ process_measurement_data <- function(data) {
         mutate(measurement = "MMSE",
                MMSE = as.double(MMSE),
                mmse_date = ymd(mmse_date),
-               difference_between_date = abs(difftime(mmse_date, registration_date, units = "days"))) %>% 
+               diff_btw_re_and_me = difftime(mmse_date, registration_date, units = "days")) %>% 
         group_by(ID) %>% 
-        mutate(rank = dense_rank(difference_between_date)) %>% 
+        mutate(rank = dense_rank(interaction(abs(diff_btw_re_and_me),
+                                             mmse_date,
+                                             lex.order = TRUE)),
+               diff_btw_me = difftime(mmse_date, lag(mmse_date), units = "days")) %>% 
         rename(measurement_date = mmse_date,
                measurement_value = MMSE) %>% 
         bind_rows(data %>%
@@ -41,38 +44,41 @@ process_measurement_data <- function(data) {
                       mutate(measurement = "CDR sum of box",
                              cdr_sum_of_box = as.double(cdr_sum_of_box),
                              cdr_date = ymd(cdr_date),
-                             difference_between_date = abs(difftime(cdr_date, registration_date, units = "days"))) %>% 
+                             diff_btw_re_and_me = difftime(cdr_date, registration_date, units = "days")) %>% 
                       group_by(ID) %>% 
-                      mutate(rank = dense_rank(difference_between_date)) %>% 
+                      mutate(rank = dense_rank(interaction(abs(diff_btw_re_and_me),
+                                                           cdr_date,
+                                                           lex.order = TRUE)),
+                             diff_btw_me = difftime(cdr_date, lag(cdr_date), units = "days")) %>% 
                       rename(measurement_date = cdr_date,
                              measurement_value = cdr_sum_of_box)) %>% 
         group_by(ID, measurement) %>% 
         mutate(delta = measurement_value - lag(measurement_value),
                delta_per_month = delta /
-                   (as.integer(difference_between_date) / 30))
+                   (as.integer(diff_btw_re_and_me) / 30))
     
     return(result)
 }
 
-print_t_test <- function(data, column, statement, compare_delta = FALSE) {
+print_t_test <- function(data, column, condition, compare_delta = FALSE) {
     if (str_detect(column, "MMSE|CDR")) {
         print(paste("Compare", column))
         x <- data %>% 
             filter(measurement == column &
                        (rank == 1 | is.na(rank)) &
-                       eval(parse_expr(paste(statement, "== 1")))) %>% 
+                       eval(parse_expr(paste(condition, "== 1")))) %>% 
             pull(measurement_value)
         y <- data %>% 
             filter(measurement == column &
                        (rank == 1 | is.na(rank)) &
-                       eval(parse_expr(paste(statement, "== 0")))) %>% 
+                       eval(parse_expr(paste(condition, "== 0")))) %>% 
             pull(measurement_value)
         result_table <- data %>% 
             ungroup() %>% 
             filter(measurement == column &
                        (rank == 1 | is.na(rank)) &
                        !is.na(measurement_value)) %>% 
-            select(statement) %>% 
+            select(condition) %>% 
             table()
         
         print(paste("Compare the", column, "(t-test)"))
@@ -85,17 +91,17 @@ print_t_test <- function(data, column, statement, compare_delta = FALSE) {
             print(paste("Compare the change in", column, "(t-test)"))
             x <- data %>% 
                 filter(measurement == column &
-                           eval(parse_expr(paste(statement, "== 1")))) %>% 
+                           eval(parse_expr(paste(condition, "== 1")))) %>% 
                 pull(delta_per_month)
             y <- data %>% 
                 filter(measurement == column &
-                           eval(parse_expr(paste(statement, "== 0")))) %>% 
+                           eval(parse_expr(paste(condition, "== 0")))) %>% 
                 pull(delta_per_month)
             result_table <- data %>% 
                 ungroup() %>% 
                 filter(measurement == column &
                            !is.na(delta_per_month)) %>% 
-                select(statement) %>% 
+                select(condition) %>% 
                 table()
             
             print(result_table)
@@ -105,14 +111,14 @@ print_t_test <- function(data, column, statement, compare_delta = FALSE) {
         }
     } else {
         x <- data %>%
-            filter(eval(parse_expr(paste(statement, "== 1")))) %>%
+            filter(eval(parse_expr(paste(condition, "== 1")))) %>%
             pull(column)
         y <- data %>%
-            filter(eval(parse_expr(paste(statement, "== 0")))) %>%
+            filter(eval(parse_expr(paste(condition, "== 0")))) %>%
             pull(column)
         result_table <- data %>%
             filter(!is.na(column)) %>%
-            select(statement) %>% 
+            select(condition) %>% 
             table()
         
         print(paste("Compare the", column, "(t-test)"))
@@ -123,9 +129,9 @@ print_t_test <- function(data, column, statement, compare_delta = FALSE) {
     }
 }
 
-print_chisq_test <- function(data, column, statement) {
+print_chisq_test <- function(data, column, condition) {
     x <- table(data %>% 
-                   pull(statement),
+                   pull(condition),
                data %>% 
                    pull(column))
     
@@ -138,40 +144,38 @@ run_analysis <- function(data, file_name) {
     sink(file_name)
     ## Continuous Variables
     for (i in c("나이", "years_of_education")) {
-        print_t_test(data = data, column = i, statement = "dementia")
+        print_t_test(data = data, column = i, condition = "dementia")
     }
     
     ## Discrete Variables
     for (i in c("성별", "hypertension", "hyperlipidemia", "diabetes", "stroke",
                 "abnormal_chromosome", "abnormal_sex_chromosome",
                 "abnormal_autosome", "turner", "xxx")) {
-        print_chisq_test(data, column = i, statement = "dementia")
+        print_chisq_test(data, column = i, condition = "dementia")
     }
     
     ## MMSE
     measurement_data <- process_measurement_data(data)
     
     print(paste("Compare MMSE between patient and normal group (t-test)"))
-    print_t_test(data = measurement_data %>% 
-                     filter(measurement == "MMSE" & (rank == 2 | is.na(rank))),
-                 column = "measurement_value", statement = "dementia")
+    print_t_test(data = measurement_data, column = "MMSE", condition = "dementia")
     sink()
 }
 
 
-# Manipulate Karyotype & Chip Data ----------------------------------------
-master_df_t2_v4 <- read_csv("data/master_data_t2_v4.csv")
+# Manipulate Karyotype Data ----------------------------------------
+master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv")
 
-karyotype_df <- master_df_t2_v4 %>% 
+karyotype_df <- master_df_t2_v3 %>% 
     filter(karyotype == TRUE)
 
 karyotype_measurement_df <- process_measurement_data(karyotype_df)
-# write_excel_csv(karyotype_measurement_df, "data/karyotype_measurement.csv")
+write_excel_csv(karyotype_measurement_df, "data/karyotype_measurement.csv")
 
-chip_df <- master_df_t2_v4 %>% 
-    filter(chip == TRUE)
+# chip_df <- master_df_t2_v3 %>% 
+#     filter(chip == TRUE)
 
-top3b_df <- master_df_t2_v4 %>% 
+top3b_df <- master_df_t2_v3 %>% 
     filter(top3b == TRUE) %>% 
     mutate(presence_major = ifelse(
         presence_22312315 + presence_22312350 + presence_22312351 == 3,
@@ -179,6 +183,8 @@ top3b_df <- master_df_t2_v4 %>%
         ifelse(presence_22312315 + presence_22312350 + presence_22312351 == 0,
                FALSE, NA)
     ))
+
+top3b_measurement_df <- process_measurement_data(top3b_df)
 
 top3b_major_df <- top3b_df %>% 
     filter(!is.na(presence_major))
@@ -200,7 +206,7 @@ temp <- karyotype_measurement_df %>%
 sink("karyotype_analysis_2.txt")
 print("Patient; Abnormal vs. Normal Chromosome")
 for (i in c("MMSE", "CDR sum of box")) {
-    print_t_test(temp, column = i, statement = "abnormal_chromosome",
+    print_t_test(temp, column = i, condition = "abnormal_chromosome",
                  compare_delta = TRUE)
 }
 
@@ -209,7 +215,7 @@ print("Normal; Abnormal vs. Normal Chromosome")
 temp <- karyotype_measurement_df %>%
     filter(dementia == 0)
 
-print_t_test(temp, column = "MMSE", statement = "abnormal_chromosome")
+print_t_test(temp, column = "MMSE", condition = "abnormal_chromosome")
 sink()
 
 # Major TOP3B Data Analysis ----------------------------------------------------
@@ -221,7 +227,7 @@ temp <- top3b_measurement_df %>%
 
 sink("top3b_analysis_2.txt")
 for (i in c("MMSE", "CDR sum of box")) {
-    print_t_test(temp, column = i, statement = "abnormal_chromosome",
+    print_t_test(temp, column = i, condition = "abnormal_chromosome",
                  compare_delta = TRUE)
 }
 
@@ -229,5 +235,5 @@ for (i in c("MMSE", "CDR sum of box")) {
 temp <- top3b_measurement_df %>%
     filter(dementia == 0)
 
-print_t_test(temp, column = "MMSE", statement = "abnormal_chromosome")
+print_t_test(temp, column = "MMSE", condition = "abnormal_chromosome")
 sink()
