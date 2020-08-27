@@ -326,7 +326,7 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
                karyotype = TRUE,
                식별코드 = str_replace(식별코드, "_", "-")) %>% 
     select(의뢰날짜, 관리번호, 식별코드, `결과 정상=0, 염색체 (상염색체, 성염색체)이상 =1`, `성염색체 이상 =1`,
-               `Turner 45X`, XXX, `상염색체 이상=1`) %>% 
+               `Turner 45X`, XXX, `상염색체 이상`) %>% 
     rename(registration_date = 1,
            management_number = 2,
            ID = 3,
