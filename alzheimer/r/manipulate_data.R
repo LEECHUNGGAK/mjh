@@ -348,12 +348,15 @@ master_df_t2_v3 <- master_df_t2_v2 %>%
               by = "ID") %>% 
     mutate(registration_date.x = ifelse(is.na(registration_date.x),
                                         registration_date.y,
-                                        registration_date.x)) %>% 
+                                        registration_date.x),
+           성별 = ifelse(성별 == "M", "Male", "Female")) %>% 
     rename(registration_date = registration_date.x,
            mmse_date = `MMSE 시행날짜`,
            cdr_date = `CDR 시행날짜`,
-           cdr_sum_of_box = `CDR_Sum of box`) %>% 
-    mutate(registration_date = as.Date(registration_date, origin = "1970-01-01")) %>% 
+           cdr_sum_of_box = `CDR_Sum of box`,
+           age = 나이,
+           gender = 성별) %>% 
+    mutate(registration_date = as.Date(registration_date, origin = "1970-01-01"),) %>% 
     select(-registration_date.y)
 
 write_excel_csv(master_df_t2_v3, "data/master_data_t2_v3.csv")
