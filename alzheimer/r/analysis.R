@@ -23,7 +23,8 @@ sink()
 process_measurement_data <- function(data) {
     result <- data %>%
         select(ID, registration_date, dementia, mmse_date, MMSE,
-               abnormal_chromosome) %>% 
+               abnormal_chromosome, abnormal_sex_chromosome, turner, xxx,
+               age, gender) %>% 
         separate_rows(MMSE, mmse_date, sep = "\n") %>% 
         mutate(measurement = "MMSE",
                MMSE = as.double(MMSE),
@@ -38,7 +39,9 @@ process_measurement_data <- function(data) {
                measurement_value = MMSE) %>% 
         bind_rows(data %>%
                       select(ID, registration_date, dementia, cdr_date,
-                             cdr_sum_of_box, abnormal_chromosome) %>% 
+                             cdr_sum_of_box, abnormal_chromosome,
+                             abnormal_sex_chromosome, turner, xxx,
+                             age, gender) %>% 
                       separate_rows(cdr_sum_of_box, cdr_date, sep = "\n") %>% 
                       filter(!is.na(cdr_sum_of_box) & cdr_sum_of_box != "ND") %>% 
                       mutate(measurement = "CDR sum of box",
@@ -55,14 +58,13 @@ process_measurement_data <- function(data) {
         group_by(ID, measurement) %>% 
         mutate(delta = measurement_value - lag(measurement_value),
                delta_per_month = delta /
-                   (as.integer(diff_btw_re_and_me) / 30))
+                   (as.integer(diff_btw_me) / 365))
     
     return(result)
 }
 
 print_t_test <- function(data, column, condition, compare_delta = FALSE) {
     if (str_detect(column, "MMSE|CDR")) {
-        print(paste("Compare", column))
         x <- data %>% 
             filter(measurement == column &
                        (rank == 1 | is.na(rank)) &
@@ -83,12 +85,11 @@ print_t_test <- function(data, column, condition, compare_delta = FALSE) {
         
         print(paste("Compare the", column, "(t-test)"))
         print(result_table)
-        print(t.test(x, y))
-        print(paste("sd of x:", sd(x, na.rm = TRUE)))
-        print(paste("sd of y:", sd(y, na.rm = TRUE)))
+        try(print(t.test(x, y)))
+        print(paste("SD of x:", sd(x, na.rm = TRUE)))
+        print(paste("SD of y:", sd(y, na.rm = TRUE)))
         
         if (compare_delta) {
-            print(paste("Compare the change in", column, "(t-test)"))
             x <- data %>% 
                 filter(measurement == column &
                            eval(parse_expr(paste(condition, "== 1")))) %>% 
@@ -104,10 +105,11 @@ print_t_test <- function(data, column, condition, compare_delta = FALSE) {
                 select(condition) %>% 
                 table()
             
+            print(paste("Compare the change in", column, "(t-test)"))
             print(result_table)
-            print(t.test(x, y))
-            print(paste("sd of x:", sd(x, na.rm = TRUE)))
-            print(paste("sd of y:", sd(y, na.rm = TRUE)))
+            try(print(t.test(x, y)))
+            print(paste("SD of x:", sd(x, na.rm = TRUE)))
+            print(paste("SD of y:", sd(y, na.rm = TRUE)))
         }
     } else {
         x <- data %>%
@@ -117,15 +119,20 @@ print_t_test <- function(data, column, condition, compare_delta = FALSE) {
             filter(eval(parse_expr(paste(condition, "== 0")))) %>%
             pull(column)
         result_table <- data %>%
+            ungroup() %>% 
             filter(!is.na(column)) %>%
             select(condition) %>% 
             table()
         
         print(paste("Compare the", column, "(t-test)"))
         print(result_table)
-        print(t.test(x, y))
-        print(paste("sd of x:", sd(x, na.rm = TRUE)))
-        print(paste("sd of y:", sd(y, na.rm = TRUE)))
+        tryCatch(print(t.test(x, y)),
+                 error = function(e) {
+                     print(paste("Mean of x:", mean(x, na.rm = TRUE)))
+                     print(paste("Mean of y:", mean(y, na.rm = TRUE)))
+                 })
+        print(paste("SD of x:", sd(x, na.rm = TRUE)))
+        print(paste("SD of y:", sd(y, na.rm = TRUE)))
     }
 }
 
@@ -199,24 +206,52 @@ top3b_major_measurement_df <- process_measurement_data(top3b_major_df) %>%
 # Karyotype & Chip Data Analysis -------------------------------------------------------
 run_analysis(karyotype_df, "karyotype_analysis.txt")
 
-## Patient; Abnormal vs. Normal Chromosome
-temp <- karyotype_measurement_df %>%
+## Abnormal vs. Normal Chromosome
+patient_df <- karyotype_measurement_df %>%
     filter(dementia == 1)
-
-sink("karyotype_analysis_2.txt")
-print("Patient; Abnormal vs. Normal Chromosome")
-for (i in c("MMSE", "CDR sum of box")) {
-    print_t_test(temp, column = i, condition = "abnormal_chromosome",
-                 compare_delta = TRUE)
-}
-
-## Normal; Abnormal vs. Normal Chromosome
-print("Normal; Abnormal vs. Normal Chromosome")
-temp <- karyotype_measurement_df %>%
+normal_df <- karyotype_measurement_df %>%
     filter(dementia == 0)
 
-print_t_test(temp, column = "MMSE", condition = "abnormal_chromosome")
+sink("karyotype_analysis_2.txt")
+for (i in c("abnormal_chromosome", "abnormal_sex_chromosome", "turner",
+            "xxx")) {
+    ## Patient
+    print(paste("Patient;", i))
+    
+    for (j in c("MMSE", "CDR sum of box", "age")) {
+        if (j == "age" & !str_detect(i, "^abnormal_")) {
+            next()
+        }
+        
+        print_t_test(patient_df, condition = i,  column = j, compare_delta = TRUE)
+    }
+    
+    ## Normal
+    for (j in c("All genders", "Male", "Female")) {
+        if (i %in% c("turner", "xxx") & j != "Total") {
+            next()
+        }
+        
+        print(paste("Normal", i, j, sep = "; "))
+        if (j != "All genders") {
+            normal_temp_df <- normal_df %>% 
+                filter(gender == j)
+        } else {
+            normal_temp_df <- normal_df
+        }
+        
+        for (k in c("MMSE", "age")) {
+            if (j != "All genders" & k == "MMSE") {
+                next()
+            }
+            
+            print_t_test(normal_temp_df, condition = i, column = k)
+        }
+        
+    }
+}
 sink()
+
 
 # Major TOP3B Data Analysis ----------------------------------------------------
 run_analysis(top3b_df, "top3b_analysis.txt")
