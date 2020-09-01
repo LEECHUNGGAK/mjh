@@ -1,7 +1,7 @@
 # Set up the environment --------------------------------------------------
 library(tidyverse)
 
-setwd("C:/Users/Administrator/Documents/SNUBH")
+setwd("C:/Users/Administrator/wd/snubh")
 
 
 # Functions ---------------------------------------------------------------
@@ -71,13 +71,13 @@ t.test2 <- function(m1, m2, s1, s2, n1, n2, m0 = 0, equal_variance = FALSE) {
 
 
 # McNemar's Chi-squared Test ----------------------------------------------
-file_v <- list.files("C:/Users/Administrator/Documents/SNUBH/SNUBH")
+file_v <- list.files("C:/Users/Administrator/Documents/snubh/snubh")
 
 sink("mcnemar_test.txt")
 for (i in file_v) {
-    snubh <- read_data(file.path("SNUBH", i))
-    snuh <- read_data(file.path("SNUH", i))
-    amc <- read_data(file.path("AMC", i))
+    snubh <- read_data(file.path("snubh", i))
+    snuh <- read_data(file.path("snuh", i))
+    amc <- read_data(file.path("amc", i))
     
     combine <- snubh + snuh + amc
     print(paste("Compare", i, "(McNemar's Chi-squared Test)"))
@@ -88,50 +88,18 @@ sink()
 
 
 # Student t-Test ----------------------------------------------------------
-snubh_df <- read_csv("snubh_output_v4.csv",
+snubh_df <- read_csv("snubh/snubh_output_v4.csv",
                      col_types = cols(time = col_integer()))
-snuh_df <- read_csv("snuh_output_v4.csv",
+snuh_df <- read_csv("snuh/snuh_output_v4.csv",
                     col_types = cols(time = col_integer()))
-amc_df <- read_csv("amc_output_v4.csv",
+amc_df <- read_csv("amc/amc_output_v4.csv",
                    col_types = cols(time = col_integer()))
 
-time_v <- c("00", "03", "06", "12", "24", "36", "48", "60")
+time_v <- c(0, 3, 6, 12, 24, 36, 48, 60)
 
-weighted_mean_df <- data.frame(time = as.integer(time_v),
-                               measurement = rep(c("zbmi", "HBA1C"), each = 8 * 11),
-                               group = c(rep(c("total"), 8 * 2),
-                                         rep(c("Male", "Female"), each = 8),
-                                         rep("0-4Y", 8),
-                                         rep("5-9Y", 8),
-                                         rep("10-14Y", 8),
-                                         rep(c("Male", "Female"), each = 8),
-                                         rep("5-9Y", 8),
-                                         rep("10-14Y", 8)),
-                               dm = c(rep(c("Type 1", "Type 2"), each = 8),
-                                      rep("Type 1", 8 * 5),
-                                      rep("Type 2", 8 * 4)),
-                               value = c(-0.45,-0.08,-0.08,0.12,0.34,0.54,0.85,0.98, # zbmi / t1d / total
-                                         1.53,1.48,1.31,1.7,1.79,1.65,1.91,1.82, # zbmi / t2d / total
-                                         -0.54,-0.16,-0.21,-0.03,0.24,0.41,0.76,0.78, # zbmi / t1d / male
-                                         -0.39,0,0.02,0.22,0.42,0.65,0.93,1.15, # zbmi / t1d / female
-                                         -0.37,0.28,0.04,0.43,0.29,0.34,0.37,0.41, # zbmi / t1d / 0-4y
-                                         -0.45,-0.04,-0.03,0.12,0.44,0.65,1.27,1.5, # zbmi / t1d / 5-9y
-                                         -0.48,-0.2,-0.14,0.03,0.3,0.54,0.77,0.92, # zbmi / t1d / 10-14y
-                                         1.37,1.31,1.26,1.5,1.64,1.72,2,1.64, # zbmi / t2d / male
-                                         1.69,1.73,1.38,1.92,1.92,1.57,1.83,2.03, # zbmi / t2d / female
-                                         1.47,1.61,0.81,1.63,1.93,2.19,1.52,2.16, # zbmi / t2d / 5-9y
-                                         1.53,1.46,1.42,1.71,1.76,1.57,2.01,1.78, # zbmi / t2d / 10-14y
-                                         10.24,7.61,7.82,8.09,8.32,8.47,8.63,8.72, # hba1c / t1d / total
-                                         9.45,6.52,6.6,7.06,7.89,8.35,8.19,8.81, # hba1c / t2d / total
-                                         9.95,7.65,7.67,7.88,8.04,8.19,8.25,8.27, # hba1c / t1d / male
-                                         10.46,7.58,7.93,8.24,8.53,8.69,8.94,9.06, # hba1c / t1d / female
-                                         9.49,7.6,7.63,7.77,7.72,7.78,7.85,7.83, # hba1c / t1d / 0-4y
-                                         9.79,7.24,7.45,7.75,8.08,8.27,8.55,8.77, # hba1c / t1d / 5-9y
-                                         10.63,7.81,8.05,8.37,8.64,8.73,8.86,8.91, # hba1c / t1d / 10-14y
-                                         9.63,6.35,6.44,7.02,7.54,8.49,8.11,8.42, # hba1c / t2d / male
-                                         9.25,6.71,6.79,7.11,8.21,8.24,8.29,9.22, # hba1c / t2d / female
-                                         8.58,6.93,6.57,7.23,8.02,8.46,7.41,8.04, # hba1c / t2d / 5-9y
-                                         9.58,6.45,6.6,7.04,8.86,8.34,8.29,8.89)) # hba1c / t2d / 10-14y
+weighted_mean_df <- read_csv(
+    "C:/Users/Administrator/wd/snubh/weighted_mean_data.csv"
+)
 
 t_df <- snubh_df %>% 
     mutate(hospital = "SNUBH") %>% 
