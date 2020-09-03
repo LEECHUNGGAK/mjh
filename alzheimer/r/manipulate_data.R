@@ -23,13 +23,12 @@ write_csv(d1, "data/m_data.csv")
 
 d1 <- read_csv("data/m_data.csv")
 
-top3b_major_coo_dataframe <- d0 %>% 
-    select(Sample, Coordinate) %>% 
-    filter(Coordinate %in% c(22312315, 22312350, 22312351)) %>% 
-    mutate(Coordinate = paste0("presence_", Coordinate),
-           value = 1) %>% 
-    spread(Coordinate, value, fill = 0) %>% 
-    rename(ID = Sample)
+top3b_major_coo_dataframe <- d1 %>% 
+    select(Sample, dementia, c_22312315, c_22312350, c_22312351) %>% 
+    rename(ID = Sample,
+           presence_22312315 = c_22312315,
+           presence_22312350 = c_22312350,
+           presence_22312351 = c_22312351)
 
 write_csv(top3b_major_coo_dataframe, "data/top3b_major_coordinate.csv")
 
@@ -356,12 +355,19 @@ master_df_t2_v3 <- master_df_t2_v2 %>%
            cdr_sum_of_box = `CDR_Sum of box`,
            age = 나이,
            gender = 성별) %>% 
-    mutate(registration_date = as.Date(registration_date, origin = "1970-01-01"),) %>% 
+    mutate(registration_date = as.Date(registration_date, origin = "1970-01-01"),
+           presence_major = ifelse(
+               presence_22312315 + presence_22312350 + presence_22312351 == 3,
+               1,
+               ifelse(presence_22312315 + presence_22312350 + presence_22312351 == 0,
+                      0, NA)
+           )) %>% 
     select(-registration_date.y)
 
 write_excel_csv(master_df_t2_v3, "data/master_data_t2_v3.csv")
 
 master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv")
+
 
 # Preprocess Chip Data ------------------------------------------------------
 chip_df <- read_csv("data/material/chip_patient.csv") %>%
@@ -386,9 +392,6 @@ master_df_t2_v4 <- master_df_t2_v3 %>%
     left_join(chip_df %>% 
                   mutate(chip = TRUE),
               by = "ID") %>% 
-    rename(mmse_date = `MMSE 시행날짜`,
-           cdr_date = `CDR 시행날짜`,
-           cdr_sum_of_box = `CDR_Sum of box`) %>% 
     mutate(registration_date.x = ifelse(is.na(registration_date.x),
                                         registration_date.y,
                                         registration_date.x)) %>% 
