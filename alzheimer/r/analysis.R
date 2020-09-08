@@ -24,7 +24,7 @@ process_measurement_data <- function(data) {
     result <- data %>%
         select(ID, registration_date, dementia, mmse_date, MMSE,
                abnormal_chromosome, abnormal_sex_chromosome, turner, xxx,
-               age, gender) %>% 
+               age, gender, presence_major, apoe_e4) %>% 
         separate_rows(MMSE, mmse_date, sep = "\n") %>% 
         mutate(measurement = "MMSE",
                MMSE = as.double(MMSE),
@@ -41,7 +41,7 @@ process_measurement_data <- function(data) {
                       select(ID, registration_date, dementia, cdr_date,
                              cdr_sum_of_box, abnormal_chromosome,
                              abnormal_sex_chromosome, turner, xxx,
-                             age, gender) %>% 
+                             age, gender, presence_major, apoe_e4) %>% 
                       separate_rows(cdr_sum_of_box, cdr_date, sep = "\n") %>% 
                       filter(!is.na(cdr_sum_of_box) & cdr_sum_of_box != "ND") %>% 
                       mutate(measurement = "CDR sum of box",
@@ -64,7 +64,7 @@ process_measurement_data <- function(data) {
 }
 
 print_t_test <- function(data, column, condition, compare_delta = FALSE) {
-    if (str_detect(column, "MMSE|CDR")) {
+    if (str_detect(column, "MMSE|CDR sum of box")) {
         x <- data %>% 
             filter(measurement == column &
                        (rank == 1 | is.na(rank)) &
@@ -114,6 +114,7 @@ print_t_test <- function(data, column, condition, compare_delta = FALSE) {
     } else {
         x <- data %>%
             filter(eval(parse_expr(paste(condition, "== 1")))) %>%
+            
             pull(column)
         y <- data %>%
             filter(eval(parse_expr(paste(condition, "== 0")))) %>%
@@ -147,25 +148,39 @@ print_chisq_test <- function(data, column, condition) {
     print(chisq.test(x))
 }
 
-run_analysis <- function(data, file_name) {
+run_analysis <- function(data, file_name, condition, top3b = FALSE) {
     sink(file_name)
     ## Continuous Variables
-    for (i in c("나이", "years_of_education")) {
-        print_t_test(data = data, column = i, condition = "dementia")
+    for (i in c("age", "years_of_education")) {
+        print_t_test(data = data, column = i, condition = condition)
+    }
+    
+    discrete_variables_v <- c(
+        "gender", "hypertension", "hyperlipidemia", "diabetes", "stroke",
+        "abnormal_chromosome", "abnormal_sex_chromosome",
+        "abnormal_autosome", "turner", "xxx", "apoe_e4"
+    )
+    
+    measurement_data <- process_measurement_data(data)
+    
+    if (top3b) {
+        discrete_variables_v <- c(discrete_variables_v, "presence_major")
+        
+        measurement_data <- measurement_data %>% 
+            left_join(data %>% 
+                          select(ID, presence_major),
+                      by = "ID")
     }
     
     ## Discrete Variables
-    for (i in c("성별", "hypertension", "hyperlipidemia", "diabetes", "stroke",
-                "abnormal_chromosome", "abnormal_sex_chromosome",
-                "abnormal_autosome", "turner", "xxx")) {
-        print_chisq_test(data, column = i, condition = "dementia")
+    for (i in discrete_variables_v) {
+        print_chisq_test(data, column = i, condition = condition)
     }
     
     ## MMSE
-    measurement_data <- process_measurement_data(data)
     
     print(paste("Compare MMSE between patient and normal group (t-test)"))
-    print_t_test(data = measurement_data, column = "MMSE", condition = "dementia")
+    print_t_test(data = measurement_data, column = "MMSE", condition = condition)
     sink()
 }
 
@@ -177,34 +192,19 @@ karyotype_df <- master_df_t2_v3 %>%
     filter(karyotype == TRUE)
 
 karyotype_measurement_df <- process_measurement_data(karyotype_df)
-write_excel_csv(karyotype_measurement_df, "data/karyotype_measurement.csv")
+# write_excel_csv(karyotype_measurement_df, "data/karyotype_measurement.csv")
 
 # chip_df <- master_df_t2_v3 %>% 
 #     filter(chip == TRUE)
 
 top3b_df <- master_df_t2_v3 %>% 
-    filter(top3b == TRUE) %>% 
-    mutate(presence_major = ifelse(
-        presence_22312315 + presence_22312350 + presence_22312351 == 3,
-        TRUE,
-        ifelse(presence_22312315 + presence_22312350 + presence_22312351 == 0,
-               FALSE, NA)
-    ))
+    filter(top3b == TRUE)
 
 top3b_measurement_df <- process_measurement_data(top3b_df)
 
-top3b_major_df <- top3b_df %>% 
-    filter(!is.na(presence_major))
-
-top3b_major_measurement_df <- process_measurement_data(top3b_major_df) %>% 
-    left_join(top3b_major_df %>% 
-                  select(ID, presence_major),
-              by = "ID")
-# write_excel_csv(top3b_major_measurement_df, "data/top3b_major_measurement.csv")
-
 
 # Karyotype & Chip Data Analysis -------------------------------------------------------
-run_analysis(karyotype_df, "karyotype_analysis.txt")
+run_analysis(karyotype_df, "karyotype_analysis.txt", condition = "dementia")
 
 ## Abnormal vs. Normal Chromosome
 patient_df <- karyotype_measurement_df %>%
@@ -223,12 +223,22 @@ for (i in c("abnormal_chromosome", "abnormal_sex_chromosome", "turner",
             next()
         }
         
-        print_t_test(patient_df, condition = i,  column = j, compare_delta = TRUE)
+        if (j == "age") {
+            print_t_test(karyotype_df %>% 
+                             filter(dementia == 1),
+                         condition = i, column = j)
+        } else {
+            print_t_test(patient_df, condition = i,  column = j, 
+                         compare_delta = TRUE)
+        }
     }
+    print_chisq_test(karyotype_df %>% 
+                         filter(dementia == 1),
+                     condition = i, column = "apoe_e4")
     
     ## Normal
     for (j in c("All genders", "Male", "Female")) {
-        if (i %in% c("turner", "xxx") & j != "Total") {
+        if (i %in% c("turner", "xxx") & j != "All genders") {
             next()
         }
         
@@ -236,39 +246,82 @@ for (i in c("abnormal_chromosome", "abnormal_sex_chromosome", "turner",
         if (j != "All genders") {
             normal_temp_df <- normal_df %>% 
                 filter(gender == j)
+            karyotype_temp_df <- karyotype_df %>% 
+                filter(dementia == 0 & gender == j)
         } else {
             normal_temp_df <- normal_df
+            karyotype_temp_df <- karyotype_df %>% 
+                filter(dementia == 0)
         }
         
         for (k in c("MMSE", "age")) {
             if (j != "All genders" & k == "MMSE") {
                 next()
             }
-            
-            print_t_test(normal_temp_df, condition = i, column = k)
+            if (k == "age") {
+                print_t_test(karyotype_temp_df, condition = i, column = k)
+            } else {
+                print_t_test(normal_temp_df, condition = i, column = k)
+            }
         }
+        print_chisq_test(karyotype_temp_df,
+                         condition = i, column = "apoe_e4")
+    }
+}
+sink()
+
+sink("apoe_analysis.txt")
+for (dementia_var in 0:1) {
+    for (condition_var in c("abnormal_chromosome", "abnormal_sex_chromosome",
+                            "turner", "xxx")) {
+        print(paste("Dementia:", dementia_var, "Condition:", condition_var))
+        print_chisq_test(karyotype_df %>% 
+                             filter(dementia == dementia_var),
+                         condition = condition_var,
+                         column = "apoe_e4")
         
+        if (dementia_var == 0 & condition_var == "abnormal_sex_chromosome") {
+            for (gender_var in c("Male", "Female")) {
+                print(paste("Dementia:", dementia_var, "Condition:", condition_var,
+                            "Gender:", gender_var))
+                print_chisq_test(karyotype_df %>% 
+                                     filter(dementia == dementia_var &
+                                                gender == gender_var),
+                                 condition = condition_var,
+                                 column = "apoe_e4")
+            }
+        }
     }
 }
 sink()
 
 
 # Major TOP3B Data Analysis ----------------------------------------------------
-run_analysis(top3b_df, "top3b_analysis.txt")
+run_analysis(top3b_df, "top3b_analysis.txt", condition = "dementia",
+             top3b = TRUE)
+run_analysis(top3b_df %>% 
+                 filter(dementia == 1 & !is.na(presence_major)),
+             "top3b_analysis_patient.txt",
+             condition = "presence_major")
+run_analysis(top3b_df %>% 
+                 filter(dementia == 0 & !is.na(presence_major)),
+             "top3b_analysis_normal.txt",
+             condition = "presence_major")
 
 ## Patient; Abnormal vs. Normal Chromosome
-temp <- top3b_measurement_df %>%
-    filter(dementia == 1)
-
 sink("top3b_analysis_2.txt")
+print("Patient; Abnormal vs. Normal Chromosome")
 for (i in c("MMSE", "CDR sum of box")) {
-    print_t_test(temp, column = i, condition = "abnormal_chromosome",
+    print_t_test(top3b_measurement_df %>% 
+                     filter(dementia == 1 & !is.na(presence_major)),
+                 column = i, condition = "presence_major",
                  compare_delta = TRUE)
 }
 
 ## Normal; Abnormal vs. Normal Chromosome
-temp <- top3b_measurement_df %>%
-    filter(dementia == 0)
-
-print_t_test(temp, column = "MMSE", condition = "abnormal_chromosome")
+print("Normal; Abnormal vs. Normal Chromosome")
+print_t_test(top3b_measurement_df %>% 
+                 filter(dementia == 0 & !is.na(presence_major)),
+             column = "MMSE", condition = "presence_major",
+             compare_delta = TRUE)
 sink()
