@@ -255,7 +255,7 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
                karyotype = TRUE,
                식별코드 = str_replace(식별코드, "_", "-")) %>% 
     select(의뢰날짜, 관리번호, 식별코드, `결과 정상=0, 염색체 (상염색체, 성염색체)이상 =1`, `성염색체 이상 =1`,
-               `Turner 45X`, XXX, `상염색체 이상`) %>% 
+               `Turner 45X`, XXX, `상염색체 이상`, `marker chr 이상`) %>% 
     rename(registration_date = 1,
            management_number = 2,
            ID = 3,
@@ -263,12 +263,14 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
            abnormal_sex_chromosome = 5,
            turner = 6,
            xxx = 7,
-           abnormal_autosome = 8) %>% 
+           abnormal_autosome = 8,
+           include_marker_chromosome = 9) %>% 
     replace_na(list(abnormal_chromosome = 0,
                     abnormal_sex_chromosome = 0,
                     abnormal_autosome = 0,
                     turner = 0,
-                    xxx = 0))
+                    xxx = 0,
+                    include_marker_chromosome = 0))
 
 master_df_t2_v3 <- master_df_t2_v2 %>% 
     rename(registration_date = 등재일) %>% 
@@ -297,6 +299,71 @@ master_df_t2_v3 <- master_df_t2_v2 %>%
 write_excel_csv(master_df_t2_v3, "data/master_data_t2_v3.csv")
 
 master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv")
+
+
+# Preprocess 2020-09-07 Karyotype Data ------------------------------------
+preprocess_karyotype_data <- function(data) {
+    result <- data %>% 
+        drop_na(식별코드) %>% 
+        select(-c(병원명, 환자명, 검체, 우선순위, Karyotype,
+                     결과상세)) %>% 
+        separate(`성별/나이`, c("gender", "age"), "/") %>% 
+        rename(management_number = 1,
+               registration_date = 2,
+               ID = 3,
+               abnormal_chromosome = 6,
+               abnormal_sex_chromosome = 7,
+               klinefelter = 8,
+               turner = 9,
+               xxx = 10,
+               abnormal_autosome = 11,
+               include_marker_chromosome = 12) %>% 
+        mutate(registration_date = ymd(registration_date),
+               ID = str_replace(ID, "'", ""),
+               gender = recode(gender, 남 = "Male", 여 = "Female"),
+               age = as.integer(age),
+               karyotype = TRUE) %>% 
+        replace_na(list(abnormal_chromosome = 0, abnormal_sex_chromosome = 0,
+                        klinefelter = 0, turner = 0, xxx = 0,
+                        abnormal_autosome = 0, include_marker_chromosome = 0))
+    
+    return(result)
+}
+
+coalesce_join <- function(x, y, by, join, suffix = c(".x", ".y")) {
+    joined <- join(x, y, by = by)
+    
+    cols <- union(names(x), names(y))
+    
+    to_coalesce <- names(joined)[!names(joined) %in% cols]
+    suffix_used <- suffix[ifelse(endsWith(to_coalesce, suffix[1]), 1, 2)]
+    
+    to_coalesce <- unique(substr(to_coalesce, 1, nchar(to_coalesce) - nchar(suffix_used)))
+    
+    coalesced <- map_dfc(to_coalesce, ~coalesce(joined[[paste0(.x, suffix[1])]],
+                                               joined[[paste0(.x, suffix[2])]]))
+    
+    names(coalesced) <- to_coalesce
+    
+    bind_cols(joined, coalesced)[cols]
+}
+
+master_df_t2_v4 <- coalesce_join(master_df_t2_v3,
+                                 preprocess_karyotype_data(
+                                     read_csv("data/material/karyotype_patient_20200907.csv")
+                                 ) %>% 
+                                     mutate(dementia = 1),
+                                 by = "ID",
+                                 join = full_join)
+
+master_df_t2_v4 <- coalesce_join(master_df_t2_v4,
+                                 preprocess_karyotype_data(
+                                     read_csv("data/material/karyotype_normal_20200907.csv")
+                                 ) %>% 
+                                     mutate(dementia = 0),
+                                 by = "ID",
+                                 join = full_join)
+write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
 
 
 # Preprocess Chip Data ------------------------------------------------------
@@ -370,11 +437,17 @@ m_apoe_df <- read_csv("data/m_apoe_data.csv")
 
 # Pivot wider
 long_apoe_df <- m_apoe_df %>% 
-    select(ID, Coordinate, dementia) %>% 
-    distinct() %>% 
-    mutate(Coordinate = paste0("c_", Coordinate),
-           Coordinate_value = 1) %>% 
-    spread(key = Coordinate, value = Coordinate_value, fill = 0)
+    select(ID, Coordinate, Genotype, Genotype_detail, Consequence, dementia) %>% 
+    mutate(Coordinate = paste0("Coordinate_", Coordinate),
+           Coordinate_value = 1,
+           Consequence_value = 1,
+           Genotype_detail_e2 = ifelse(str_detect(Genotype_detail, "e2"), 1, 0),
+           Genotype_detail_e3 = ifelse(str_detect(Genotype_detail, "e3"), 1, 0),
+           Genotype_detail_e4 = ifelse(str_detect(Genotype_detail, "e4"), 1, 0),
+           Genotype = recode(Genotype, "hom" = 1, "het" = 0)) %>% 
+    spread(key = Coordinate, value = Coordinate_value, fill = 0) %>% 
+    spread(key = Consequence, value = Consequence_value, fill = 0) %>% 
+    select(-Genotype_detail)
 
 write_csv(long_apoe_df, "data/long_apoe_data.csv")
 
