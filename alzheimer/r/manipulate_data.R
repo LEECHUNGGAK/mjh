@@ -155,6 +155,50 @@ process_master_data <- function(master_data,
     return(result)
 }
 
+process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
+    file_v <- str_remove(list.files(data_file_path), ".xls$")
+    
+    temp_df <- data.frame()
+    
+    for (i in list.files(data_file_path, full.names = TRUE)) {
+        temp_df <- bind_rows(temp_df,
+                             read_excel(i) %>% 
+                                 filter(Gene == gene) %>% 
+                                 select(Variant, Coordinate, Genotype, Exonic, Consequence) %>% 
+                                 mutate(ID = str_extract(i, "(N|P)-\\d+")))
+    }
+    
+    result_df <- data.frame(ID = str_replace(file_v, ".xls", ""),
+                            Coordinate = rep(unique(temp_df$Coordinate),
+                                             each = length(file_v))) %>% 
+        left_join(temp_df, by = c("ID", "Coordinate")) %>% 
+        arrange(ID) %>% 
+        replace_na(list(Variant = "normal", Genotype = "homozygous wild type", Exonic = "no")) %>% 
+        mutate(Consequence_value = 1,
+               Genotype = recode(Genotype, hom = "homozygous mutant type",
+                                 het = "heterozygous mutant type")) %>% 
+        spread(key = Consequence, value = Consequence_value, fill = 0) %>% 
+        select(-`<NA>`) %>% 
+        mutate(dementia = ifelse(str_sub(ID, 1, 1) == "N", 0, 1))
+    
+    if (gene == "APOE") {
+        result_df <- result_df %>% 
+            left_join(read_csv("data/material/APOE_genotyping_data.csv") %>% 
+                          rename(ID = 1, apoe = 2),
+                      by = "ID") %>% 
+            mutate(g_carrier = ifelse(Variant != "normal" & 
+                                          str_detect(str_sub(Variant, 3), "G"),
+                                      1, 0),
+                   g_hom = ifelse(Variant != "normal" & 
+                                      str_detect(str_sub(Variant, 3), "G/G"),
+                                  1, 0))
+    }
+    
+    if (result_file_path != FALSE) {
+        write_csv(result_df, result_file_path)
+    }
+}
+
 
 # Manipulate Master Data -------------------------------------------------------------
 master_target_dataframe <- read_csv("data/material/master_target.csv")
@@ -341,7 +385,7 @@ coalesce_join <- function(x, y, by, join, suffix = c(".x", ".y")) {
     to_coalesce <- unique(substr(to_coalesce, 1, nchar(to_coalesce) - nchar(suffix_used)))
     
     coalesced <- map_dfc(to_coalesce, ~coalesce(joined[[paste0(.x, suffix[1])]],
-                                               joined[[paste0(.x, suffix[2])]]))
+                                                joined[[paste0(.x, suffix[2])]]))
     
     names(coalesced) <- to_coalesce
     
@@ -399,57 +443,42 @@ master_df_t2_v4 <- master_df_t2_v3 %>%
 write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
 
 
-# Manipulate ApoE Data ----------------------------------------------------
-apoe_df <- data.frame()
+# Manipulate ApoE & TOP3B Data ----------------------------------------------------
+apoe_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
+                            result_file_path = "data/apoe_data_v2.csv",
+                            gene = "APOE")
 
-for (i in list.files("data/raw/NGS_result", full.names = TRUE)) {
-    apoe_tmp_df <- read_excel(i) %>% 
-        select(Gene, Variant, Coordinate, Genotype, Exonic, Consequence) %>% 
-        filter(Gene == "APOE") %>% 
-        mutate(ID = str_extract(i, "(N|P)-\\d+"))
-    
-    apoe_df <- bind_rows(apoe_df, apoe_tmp_df)
-}
+# apoe_check_df <- data.frame(ID = file_v) %>% 
+#     left_join(apoe_df,
+#               by = "ID") %>%
+#     distinct(ID, Gene) %>%
+#     group_by(Gene) %>% 
+#     sample_n(20) %>% 
+#     ungroup() %>% 
+#     select(ID) %>% 
+#     left_join(apoe_df,
+#               by = "ID")
+# write_excel_csv(apoe_check_df, "apoe_check.csv")
 
-file_v <- str_remove(list.files("data/raw/NGS_result"), ".xls$")
-
-apoe_check_df <- data.frame(ID = file_v) %>% 
-    left_join(apoe_df,
-              by = "ID") %>%
-    distinct(ID, Gene) %>%
-    group_by(Gene) %>% 
-    sample_n(20) %>% 
-    ungroup() %>% 
-    select(ID) %>% 
-    left_join(apoe_df,
-              by = "ID")
-write_excel_csv(apoe_check_df, "apoe_check.csv")
-    
-m_apoe_df <- apoe_df %>% 
-    left_join(read_csv("data/material/APOE_genotyping_data.csv") %>% 
-                  rename(ID = No., Genotype_detail = APOE),
-              by = "ID") %>% 
-    mutate(dementia = ifelse(str_sub(ID, 1, 1) == "N", 0, 1))
-
-write_csv(m_apoe_df, "data/m_apoe_data.csv")
-
-m_apoe_df <- read_csv("data/m_apoe_data.csv")
+apoe_df <- read_csv("data/apoe_data_v2.csv")
 
 # Pivot wider
-long_apoe_df <- m_apoe_df %>% 
-    select(ID, Coordinate, Genotype, Genotype_detail, Consequence, dementia) %>% 
+long_apoe_df <- apoe_df %>% 
+    select(ID, Coordinate, Genotype, ends_with("_variant"), dementia) %>% 
     mutate(Coordinate = paste0("Coordinate_", Coordinate),
            Coordinate_value = 1,
-           Consequence_value = 1,
-           Genotype_detail_e2 = ifelse(str_detect(Genotype_detail, "e2"), 1, 0),
-           Genotype_detail_e3 = ifelse(str_detect(Genotype_detail, "e3"), 1, 0),
-           Genotype_detail_e4 = ifelse(str_detect(Genotype_detail, "e4"), 1, 0),
            Genotype = recode(Genotype, "hom" = 1, "het" = 0)) %>% 
     spread(key = Coordinate, value = Coordinate_value, fill = 0) %>% 
     spread(key = Consequence, value = Consequence_value, fill = 0) %>% 
     select(-Genotype_detail)
 
 write_csv(long_apoe_df, "data/long_apoe_data.csv")
+
+# Process TOP3B Data
+top3b_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
+                             result_file_path = "data/top3b_data_v2.csv",
+                             gene = "TOP3B")
+
 
 
 # Create ApoE Plot --------------------------------------------------------
