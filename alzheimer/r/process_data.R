@@ -4,117 +4,6 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 library(tidyverse)
 library(lubridate)
 library(readxl)
-library(data.table)
-
-
-# Manipulate TOP3B SNV Coordinate Data ---------------------------------------------------------
-d0 <- read_csv("data/material/data.csv")
-
-d1 <- d0 %>% 
-    select(Sample, Coordinate) %>% 
-    distinct() %>% 
-    mutate(Coordinate = paste0("c_", Coordinate),
-           coordinate_value = 1,
-           dementia = ifelse(str_sub(Sample, 1, 1) == "N", 0, 1)) %>% 
-    spread(Coordinate, coordinate_value, fill = 0) %>% 
-    mutate(coordinate_count = rowSums(.[3:ncol(.)]))
-
-write_csv(d1, "data/m_data.csv")
-
-d1 <- read_csv("data/m_data.csv")
-
-top3b_major_coo_dataframe <- d1 %>% 
-    select(Sample, dementia, c_22312315, c_22312350, c_22312351) %>% 
-    rename(ID = Sample,
-           presence_22312315 = c_22312315,
-           presence_22312350 = c_22312350,
-           presence_22312351 = c_22312351)
-
-write_csv(top3b_major_coo_dataframe, "data/top3b_major_coordinate.csv")
-
-top3b_major_coo_dataframe <- read_csv("data/top3b_major_coordinate.csv")
-
-# Extract Distinct Coordinate
-distinct_coordinate <- d0 %>% 
-    distinct(Coordinate)
-
-write_csv(distinct_coordinate, "data/distinct_coordinate.csv")
-
-distinct_coordinate <- read_csv("data/distinct_coordinate.csv")
-
-# Draw a Graph: The Sum of Coordinate Count by the Patient
-d1 %>%
-    group_by(coordinate_count) %>% 
-    summarize(n = n()) %>% 
-    ggplot(aes(x = coordinate_count, y = n)) +
-    geom_bar(stat = "identity") +
-    labs(x = "The Sum of Coordinate Count", y = "The Number of Patients") +
-    scale_x_continuous(breaks = 1:max(d1$coordinate_count))
-ggsave("The_Sum_of_Coordinate_Count.png")
-
-# The Number of Patients by Coordinate Combination
-coo_combn_dataframe <- d1
-
-for (var_choose in 3:1) {
-    coo_combn <- combn(pull(distinct_coordinate), var_choose)
-    
-    for (i in 1:ncol(coo_combn)) {
-        col_name <- paste(c("c", coo_combn[, i]), collapse = "_")
-        
-        for (j in 1:var_choose) {
-            assign(paste0("col", j), paste0("c_", coo_combn[j, i]))
-        }
-        
-        if (var_choose == 3) {
-            coo_combn_dataframe <- coo_combn_dataframe %>% 
-                mutate(!!col_name := ifelse(!!sym(col1) + !!sym(col2) + !!sym(col3) == 3, 1, 0))
-        } else if (var_choose == 2) {
-            coo_combn_dataframe <- coo_combn_dataframe %>% 
-                mutate(!!col_name := ifelse((!!sym(col1) + !!sym(col2) == 2) &
-                                                coordinate_count == 2, 1, 0))
-        } else {
-            coo_combn_dataframe <- coo_combn_dataframe %>% 
-                mutate(!!col_name := ifelse((!!sym(col1) == 1) &
-                                                coordinate_count == 1, 1, 0))
-        }
-    }
-}
-
-write_csv(coo_combn_dataframe, "data/combination_of_coordinate.csv")
-
-coo_combn_dataframe <- read_csv("data/combination_of_coordinate.csv")
-
-# The number of patients in non-zero coordinate combination
-sum_coo_combn_dataframe <- coo_combn_dataframe[, 3:ncol(coo_combn_dataframe)] %>% 
-    select(-coordinate_count) %>% 
-    summarize_all(list(sum)) %>% 
-    gather("combination_of_coordinate", "value") %>% 
-    filter(value > 0) %>%
-    arrange(str_length(combination_of_coordinate), desc(value))
-
-write_csv(sum_coo_combn_dataframe, "The_Number_of_Patients_by_Coordinate_Combination.csv")
-
-sum_coo_combn_dataframe <- read_csv("The_Number_of_Patients_by_Coordinate_Combination.csv")
-
-# The number of patients in zero coordinate combination
-sum_zero_coo_combn_dataframe <- coo_combn_dataframe[, 3:ncol(coo_combn_dataframe)] %>% 
-    select(-coordinate_count) %>% 
-    summarize_all(list(sum)) %>% 
-    gather("combination_of_coordinate", "value") %>% 
-    filter(value == 0)
-
-write_csv(sum_zero_coo_combn_dataframe, "data/zero_cordinate_combination_data.csv")
-
-sum_zero_coo_combn_dataframe <- read_csv("data/zero_cordinate_combination_data.csv")
-
-# Write non-zero coordinate combination data frame
-non_zero_coo_combn_dataframe <- coo_combn_dataframe %>% 
-    select(-sum_zero_coo_combn_dataframe$combination_of_coordinate) %>% 
-    rename(ID = Sample)
-
-write_csv(non_zero_coo_combn_dataframe, "data/non_zero_coordinate_combination_data.csv")
-
-non_zero_coo_combn_dataframe <- read_csv("data/non_zero_coordinate_combination_data.csv")
 
 
 # Function; process_master_data -------------------------------------------
@@ -155,50 +44,6 @@ process_master_data <- function(master_data,
     return(result)
 }
 
-process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
-    file_v <- str_remove(list.files(data_file_path), ".xls$")
-    
-    temp_df <- data.frame()
-    
-    for (i in list.files(data_file_path, full.names = TRUE)) {
-        temp_df <- bind_rows(temp_df,
-                             read_excel(i) %>% 
-                                 filter(Gene == gene) %>% 
-                                 select(Variant, Coordinate, Genotype, Exonic, Consequence) %>% 
-                                 mutate(ID = str_extract(i, "(N|P)-\\d+")))
-    }
-    
-    result_df <- data.frame(ID = str_replace(file_v, ".xls", ""),
-                            Coordinate = rep(unique(temp_df$Coordinate),
-                                             each = length(file_v))) %>% 
-        left_join(temp_df, by = c("ID", "Coordinate")) %>% 
-        arrange(ID) %>% 
-        replace_na(list(Variant = "normal", Genotype = "homozygous wild type", Exonic = "no")) %>% 
-        mutate(Consequence_value = 1,
-               Genotype = recode(Genotype, hom = "homozygous mutant type",
-                                 het = "heterozygous mutant type")) %>% 
-        spread(key = Consequence, value = Consequence_value, fill = 0) %>% 
-        select(-`<NA>`) %>% 
-        mutate(dementia = ifelse(str_sub(ID, 1, 1) == "N", 0, 1))
-    
-    if (gene == "APOE") {
-        result_df <- result_df %>% 
-            left_join(read_csv("data/material/APOE_genotyping_data.csv") %>% 
-                          rename(ID = 1, apoe = 2),
-                      by = "ID") %>% 
-            mutate(g_carrier = ifelse(Variant != "normal" & 
-                                          str_detect(str_sub(Variant, 3), "G"),
-                                      1, 0),
-                   g_hom = ifelse(Variant != "normal" & 
-                                      str_detect(str_sub(Variant, 3), "G/G"),
-                                  1, 0))
-    }
-    
-    if (result_file_path != FALSE) {
-        write_csv(result_df, result_file_path)
-    }
-}
-
 
 # Manipulate Master Data -------------------------------------------------------------
 master_target_dataframe <- read_csv("data/material/master_target.csv")
@@ -215,13 +60,13 @@ master_dataframe <- master_target_dataframe %>%
 master_dataframe <- process_master_data(master_dataframe)
 
 master_dataframe <- master_dataframe %>% 
-    rename(ID = No) %>% 
+    rename(id = No) %>% 
     full_join(top3b_major_coo_dataframe %>% 
                   mutate(top3b = TRUE),
-              by = "ID") %>% 
+              by = "id") %>% 
     left_join(non_zero_coo_combn_dataframe %>% 
-                  mutate(Source = ifelse(str_length(ID) == 8, 1, 2)),
-              by = "ID") %>% 
+                  mutate(Source = ifelse(str_length(id) == 8, 1, 2)),
+              by = "id") %>% 
     mutate(Source = ifelse(is.na(Source), 0, Source),
            Dementia = ifelse((!is.na(Dementia_a) & Dementia_a == TRUE) |
                                  (!is.na(dementia) & dementia == 1), TRUE,
@@ -230,7 +75,7 @@ master_dataframe <- master_dataframe %>%
     select(-c(Dementia_a, dementia)) %>% 
     relocate(Dementia, .after = presence_22312351) %>% 
     relocate(Source, .before = presence_22312315) %>% 
-    drop_na(ID)
+    drop_na(id)
 
 # write_excel_csv(master_dataframe, "data/master_data.csv")
 
@@ -246,13 +91,13 @@ master_df_t2 <- process_master_data(master_df_t2,
                                     years_of_education = TRUE)
 
 master_df_t2 <- master_df_t2 %>% 
-    rename(ID = No) %>% 
+    rename(id = No) %>% 
     full_join(top3b_major_coo_dataframe %>% 
                   mutate(top3b = TRUE),
-              by = "ID") %>% 
-    mutate(dementia = ifelse(str_sub(ID, 1, 1) == "N", 0, 1)) %>% 
+              by = "id") %>% 
+    mutate(dementia = ifelse(str_sub(id, 1, 1) == "N", 0, 1)) %>% 
     relocate(dementia, .after = presence_22312351) %>% 
-    drop_na(ID)
+    drop_na(id)
 
 write_excel_csv(master_df_t2, "data/master_data_t2.csv")
 
@@ -279,7 +124,7 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv") %>%
                최근PET검사일 = as.character(최근PET검사일),
                최종학력 = as.character(최종학력)) %>% 
     drop_na(No) %>% 
-    rename(ID = No)
+    rename(id = No)
 
 cancerrop_df <- process_master_data(cancerrop_df)
 
@@ -299,28 +144,30 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
                karyotype = TRUE,
                식별코드 = str_replace(식별코드, "_", "-")) %>% 
     select(의뢰날짜, 관리번호, 식별코드, `결과 정상=0, 염색체 (상염색체, 성염색체)이상 =1`, `성염색체 이상 =1`,
-               `Turner 45X`, XXX, `상염색체 이상`, `marker chr 이상`) %>% 
+               `Turner 45X`, XXX, `상염색체 이상`, `marker chr 이상`, `Klinefelter (XXY)`) %>% 
     rename(registration_date = 1,
            management_number = 2,
-           ID = 3,
+           id = 3,
            abnormal_chromosome = 4,
            abnormal_sex_chromosome = 5,
            turner = 6,
            xxx = 7,
            abnormal_autosome = 8,
-           include_marker_chromosome = 9) %>% 
+           include_marker_chromosome = 9,
+           klinefelter = 10) %>% 
     replace_na(list(abnormal_chromosome = 0,
                     abnormal_sex_chromosome = 0,
                     abnormal_autosome = 0,
                     turner = 0,
                     xxx = 0,
-                    include_marker_chromosome = 0))
+                    include_marker_chromosome = 0,
+                    klinefelter = 0))
 
 master_df_t2_v3 <- master_df_t2_v2 %>% 
     rename(registration_date = 등재일) %>% 
     left_join(karyotype_dataframe %>% 
                   mutate(karyotype = TRUE),
-              by = "ID") %>% 
+              by = "id") %>% 
     mutate(registration_date.x = ifelse(is.na(registration_date.x),
                                         registration_date.y,
                                         registration_date.x),
@@ -354,7 +201,7 @@ preprocess_karyotype_data <- function(data) {
         separate(`성별/나이`, c("gender", "age"), "/") %>% 
         rename(management_number = 1,
                registration_date = 2,
-               ID = 3,
+               id = 3,
                abnormal_chromosome = 6,
                abnormal_sex_chromosome = 7,
                klinefelter = 8,
@@ -363,7 +210,7 @@ preprocess_karyotype_data <- function(data) {
                abnormal_autosome = 11,
                include_marker_chromosome = 12) %>% 
         mutate(registration_date = ymd(registration_date),
-               ID = str_replace(ID, "'", ""),
+               id = str_replace(id, "'", ""),
                gender = recode(gender, 남 = "Male", 여 = "Female"),
                age = as.integer(age),
                karyotype = TRUE) %>% 
@@ -397,7 +244,7 @@ master_df_t2_v4 <- coalesce_join(master_df_t2_v3,
                                      read_csv("data/material/karyotype_patient_20200907.csv")
                                  ) %>% 
                                      mutate(dementia = 1),
-                                 by = "ID",
+                                 by = "id",
                                  join = full_join)
 
 master_df_t2_v4 <- coalesce_join(master_df_t2_v4,
@@ -405,7 +252,7 @@ master_df_t2_v4 <- coalesce_join(master_df_t2_v4,
                                      read_csv("data/material/karyotype_normal_20200907.csv")
                                  ) %>% 
                                      mutate(dementia = 0),
-                                 by = "ID",
+                                 by = "id",
                                  join = full_join)
 write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
 
@@ -422,7 +269,7 @@ chip_df <- read_csv("data/material/chip_patient.csv") %>%
            chip_abnormal_autosome = `상염색체 이상 =1`,
            chip_abnormal_sex_chromosome = `성염색체 이상=1`,
            management_number = 관리번호,
-           ID = 식별코드) %>% 
+           id = 식별코드) %>% 
     replace_na(list(chip_abnormal_sex_chromosome = 0,
                     chip_abnormal_autosome = 0,
                     chip_abnormal_chromosome = 0)) %>% 
@@ -432,7 +279,7 @@ chip_df <- read_csv("data/material/chip_patient.csv") %>%
 master_df_t2_v4 <- master_df_t2_v3 %>% 
     left_join(chip_df %>% 
                   mutate(chip = TRUE),
-              by = "ID") %>% 
+              by = "id") %>% 
     mutate(registration_date.x = ifelse(is.na(registration_date.x),
                                         registration_date.y,
                                         registration_date.x)) %>% 
@@ -443,47 +290,9 @@ master_df_t2_v4 <- master_df_t2_v3 %>%
 write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
 
 
-# Manipulate ApoE & TOP3B Data ----------------------------------------------------
-apoe_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
-                            result_file_path = "data/apoe_data_v2.csv",
-                            gene = "APOE")
-
-# apoe_check_df <- data.frame(ID = file_v) %>% 
-#     left_join(apoe_df,
-#               by = "ID") %>%
-#     distinct(ID, Gene) %>%
-#     group_by(Gene) %>% 
-#     sample_n(20) %>% 
-#     ungroup() %>% 
-#     select(ID) %>% 
-#     left_join(apoe_df,
-#               by = "ID")
-# write_excel_csv(apoe_check_df, "apoe_check.csv")
-
-apoe_df <- read_csv("data/apoe_data_v2.csv")
-
-# Pivot wider
-long_apoe_df <- apoe_df %>% 
-    select(ID, Coordinate, Genotype, ends_with("_variant"), dementia) %>% 
-    mutate(Coordinate = paste0("Coordinate_", Coordinate),
-           Coordinate_value = 1,
-           Genotype = recode(Genotype, "hom" = 1, "het" = 0)) %>% 
-    spread(key = Coordinate, value = Coordinate_value, fill = 0) %>% 
-    spread(key = Consequence, value = Consequence_value, fill = 0) %>% 
-    select(-Genotype_detail)
-
-write_csv(long_apoe_df, "data/long_apoe_data.csv")
-
-# Process TOP3B Data
-top3b_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
-                             result_file_path = "data/top3b_data_v2.csv",
-                             gene = "TOP3B")
-
-
-
 # Create ApoE Plot --------------------------------------------------------
 plot_dataframe <- m_apoe_df %>% 
-    select(ID, Coordinate, dementia) %>% 
+    select(id, Coordinate, dementia) %>% 
     mutate(dementia = recode(dementia, `1` = TRUE, `0` = FALSE)) %>% 
     # Recode function does not work on numeric vector. Use grave accent.
     distinct() %>% 
