@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-path = "C:/Users/Administrator/wd/alzheimer/output_apoe"
+path = "C:/Users/Administrator/wd/alzheimer/output/ngs/o_apoe"
 
 if not os.path.isdir(path):
     os.mkdir(path)
@@ -152,10 +152,10 @@ def prediction_fn(features, labels):
 
 
 #%% TOP3B Predict
-top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/non_zero_coordinate_combination_data.csv",
+top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/ngs/comb_top3b_data.csv",
                                  sep = ",")
 
-top3b_dataframe_1 = top3b_dataframe_0.drop(["Sample", "coordinate_count"], axis = 1)
+top3b_dataframe_1 = top3b_dataframe_0.drop(["id", "n_variant"], axis = 1)
 
 features_dataframe = top3b_dataframe_1.drop("dementia", axis = 1)
 labels_dataframe = top3b_dataframe_1["dementia"]
@@ -164,10 +164,10 @@ prediction_fn(features_dataframe, labels_dataframe)
 
 
 #%% APOE Predict
-apoe_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/m_apoe_dataframe.csv",
-                                 sep = ",")
+apoe_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/apoe_data_t2.csv", 
+                               sep = ",")
 
-apoe_dataframe_1 = apoe_dataframe_0.drop("ID", axis = 1)
+apoe_dataframe_1 = apoe_dataframe_0.drop("id", axis = 1)
 
 features_dataframe = apoe_dataframe_1.drop("dementia", axis = 1)
 labels_dataframe = apoe_dataframe_1["dementia"]
