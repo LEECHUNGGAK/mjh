@@ -7,22 +7,63 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 
 
 # ApoE chisq.test ---------------------------------------------------------
-apoe_df <- read_csv("data/long_apoe_data.csv")
+apoe_df <- read_csv("data/ngs/apoe_data.csv")
 
-sink("ApoE_Chisq_Test_Result.txt")
-for (i in colnames(apoe_df)[3:ncol(apoe_df)]) {
-    temp <- table(apoe_df[[i]], apoe_df[, dementia])
+work_df <- apoe_df %>% 
+    filter(Coordinate == 45409167)
+
+sink("ApoE_Chisq_Test.txt")
+for (i in c("g_carrier", "g_hom")) {
+    temp <- table(work_df %>% 
+                      pull(dementia),
+                  work_df %>% 
+                      pull(i))
+    rownames(temp) <- c("Normal", "Dementia")
+    colnames(temp) <- c("Normal", i)
+    
     print(i)
     print(temp)
     print(chisq.test(temp))
 }
 sink()
 
+for (i in colnames(long_apoe_df)[8:ncol(long_apoe_df)]) {
+    temp <- table(long_apoe_df %>% 
+                      pull(dementia),
+                  long_apoe_df %>% 
+                      pull(i))
+    rownames(temp) <- c("Normal", "Dementia")
+    colnames(temp) <- c("Normal", "SNV")
+    
+    print(i)
+    print(temp)
+    print(chisq.test(temp))
+}
+sink()
+
+apoe_df <- read_csv("data/m_apoe_data.csv")
+
+# Check the Variant
+apoe_df %>% 
+    filter(Coordinate == 45409167 & Genotype == "hom") %>% 
+    distinct(Variant)
+
+apoe_genotype <- table(apoe_df %>% 
+                           filter(Coordinate == 45409167) %>% 
+                           distinct(id, Genotype, dementia) %>% 
+                           pull(dementia),
+                       apoe_df %>% 
+                           filter(Coordinate == 45409167) %>% 
+                           distinct(id, Genotype, dementia) %>% 
+                           pull(Genotype))
+print(apoe_genotype)
+print(chisq.test(apoe_genotype))
+
 
 # Function --------------------------------------
 process_measurement_data <- function(data) {
     result <- data %>%
-        select(ID, registration_date, dementia, mmse_date, MMSE,
+        select(id, registration_date, dementia, mmse_date, MMSE,
                abnormal_chromosome, abnormal_sex_chromosome, turner, xxx,
                age, gender, presence_major, apoe_e4) %>% 
         separate_rows(MMSE, mmse_date, sep = "\n") %>% 
@@ -30,15 +71,15 @@ process_measurement_data <- function(data) {
                MMSE = as.double(MMSE),
                mmse_date = ymd(mmse_date),
                diff_btw_re_and_me = difftime(mmse_date, registration_date, units = "days")) %>% 
-        group_by(ID) %>% 
-        mutate(rank = dense_rank(interaction(abs(diff_btw_re_and_me),
+        group_by(id) %>% 
+        mutate(rank = dense_rank(interaction(diff_btw_re_and_me,
                                              mmse_date,
                                              lex.order = TRUE)),
                diff_btw_me = difftime(mmse_date, lag(mmse_date), units = "days")) %>% 
         rename(measurement_date = mmse_date,
                measurement_value = MMSE) %>% 
         bind_rows(data %>%
-                      select(ID, registration_date, dementia, cdr_date,
+                      select(id, registration_date, dementia, cdr_date,
                              cdr_sum_of_box, abnormal_chromosome,
                              abnormal_sex_chromosome, turner, xxx,
                              age, gender, presence_major, apoe_e4) %>% 
@@ -48,14 +89,14 @@ process_measurement_data <- function(data) {
                              cdr_sum_of_box = as.double(cdr_sum_of_box),
                              cdr_date = ymd(cdr_date),
                              diff_btw_re_and_me = difftime(cdr_date, registration_date, units = "days")) %>% 
-                      group_by(ID) %>% 
-                      mutate(rank = dense_rank(interaction(abs(diff_btw_re_and_me),
+                      group_by(id) %>% 
+                      mutate(rank = dense_rank(interaction(diff_btw_re_and_me,
                                                            cdr_date,
                                                            lex.order = TRUE)),
                              diff_btw_me = difftime(cdr_date, lag(cdr_date), units = "days")) %>% 
                       rename(measurement_date = cdr_date,
                              measurement_value = cdr_sum_of_box)) %>% 
-        group_by(ID, measurement) %>% 
+        group_by(id, measurement) %>% 
         mutate(delta = measurement_value - lag(measurement_value),
                delta_per_month = delta /
                    (as.integer(diff_btw_me) / 365))
@@ -158,7 +199,7 @@ run_analysis <- function(data, file_name, condition, top3b = FALSE) {
     discrete_variables_v <- c(
         "gender", "hypertension", "hyperlipidemia", "diabetes", "stroke",
         "abnormal_chromosome", "abnormal_sex_chromosome",
-        "abnormal_autosome", "turner", "xxx", "apoe_e4"
+        "abnormal_autosome", "turner", "xxx", "apoe_e4", "include_marker_chromosome"
     )
     
     measurement_data <- process_measurement_data(data)
@@ -168,8 +209,8 @@ run_analysis <- function(data, file_name, condition, top3b = FALSE) {
         
         measurement_data <- measurement_data %>% 
             left_join(data %>% 
-                          select(ID, presence_major),
-                      by = "ID")
+                          select(id, presence_major),
+                      by = "id")
     }
     
     ## Discrete Variables
@@ -188,6 +229,10 @@ run_analysis <- function(data, file_name, condition, top3b = FALSE) {
 # Manipulate Karyotype Data ----------------------------------------
 master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv")
 
+master_measurement_df <- process_measurement_data(master_df_t2_v3)
+write_csv(master_measurement_df, "data/master_measurement.csv")
+
+# 2020-09-18-Use 2019 karyotype data without adding 2018 karyotype data
 karyotype_df <- master_df_t2_v3 %>% 
     filter(karyotype == TRUE)
 
@@ -325,3 +370,50 @@ print_t_test(top3b_measurement_df %>%
              column = "MMSE", condition = "presence_major",
              compare_delta = TRUE)
 sink()
+
+
+# Check the Interaction between ApoE E4 and Abnormal Sex Chromosome --------
+sink("interaction.txt")
+for (i in c("abnormal_sex_chromosome", "presence_major")) {
+    print(paste("The Interaction between ApoE E4 and", i))
+    f <- as.formula(paste("dementia ~ apoe_e4 +", i, "+ apoe_e4 *", i))
+    lr <- glm(formula = f,
+              data = master_df_t2_v4,
+              family = "binomial")
+    print(summary(lr))
+    
+    temp <- master_df_t2_v4 %>% 
+        mutate(interaction := apoe_e4 * !!sym(i)) %>% 
+        select(apoe_e4, !!i, interaction, dementia) %>% 
+        drop_na()
+    
+    print("dementia n")
+    temp %>% 
+        filter(dementia == 1) %>% 
+        summarize(n = n()) %>% 
+        print()
+    
+    for (j in 1:3) {
+        for (k in c("interaction", "dementia")) {
+            print(paste(names(temp)[j], k))
+            temp %>% 
+                filter_at(j, all_vars(. == 1)) %>%
+                group_by_at(k) %>% 
+                summarize(n = n()) %>% 
+                mutate(proportion = n / sum(n)) %>% 
+                print()
+        }
+    }
+}
+sink()
+
+karyotype_measurement_df %>% 
+    filter(xxx == 1 & measurement == "CDR sum of box") %>% 
+    group_by(id) %>% 
+    summarize(n = n()) %>% 
+    filter(n > 1) %>% 
+    left_join(karyotype_measurement_df, by = "id") %>% 
+    filter(measurement == "CDR sum of box") %>% 
+    select(id, dementia, xxx, registration_date, measurement_date, diff_btw_re_and_me,
+           diff_btw_me, rank, measurement_value, measurement, delta, delta_per_month) %>% 
+    write_csv("check_xxx_delta_cdr_sob.csv")
