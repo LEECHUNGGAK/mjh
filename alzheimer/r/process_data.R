@@ -6,7 +6,7 @@ library(lubridate)
 library(readxl)
 
 
-# Function; process_master_data -------------------------------------------
+# Functions -------------------------------------------
 process_master_data <- function(master_data,
                                 years_of_education = FALSE) {
     cardiac_disease_character <- paste0(
@@ -42,6 +42,52 @@ process_master_data <- function(master_data,
     }
     
     return(result)
+}
+
+preprocess_karyotype_data <- function(data) {
+    result <- data %>% 
+        drop_na(식별코드) %>% 
+        select(-c(병원명, 환자명, 검체, 우선순위, Karyotype,
+                     결과상세)) %>% 
+        separate(`성별/나이`, c("gender", "age"), "/") %>% 
+        rename(management_number = 1,
+               registration_date = 2,
+               id = 3,
+               abnormal_chromosome = 6,
+               abnormal_sex_chromosome = 7,
+               klinefelter = 8,
+               turner = 9,
+               xxx = 10,
+               abnormal_autosome = 11,
+               include_marker_chromosome = 12) %>% 
+        mutate(registration_date = ymd(registration_date),
+               id = str_replace(id, "'", ""),
+               gender = recode(gender, 남 = "Male", 여 = "Female"),
+               age = as.integer(age),
+               karyotype = TRUE) %>% 
+        replace_na(list(abnormal_chromosome = 0, abnormal_sex_chromosome = 0,
+                        klinefelter = 0, turner = 0, xxx = 0,
+                        abnormal_autosome = 0, include_marker_chromosome = 0))
+    
+    return(result)
+}
+
+coalesce_join <- function(x, y, by, join, suffix = c(".x", ".y")) {
+    joined <- join(x, y, by = by)
+    
+    cols <- union(names(x), names(y))
+    
+    to_coalesce <- names(joined)[!names(joined) %in% cols]
+    suffix_used <- suffix[ifelse(endsWith(to_coalesce, suffix[1]), 1, 2)]
+    
+    to_coalesce <- unique(substr(to_coalesce, 1, nchar(to_coalesce) - nchar(suffix_used)))
+    
+    coalesced <- map_dfc(to_coalesce, ~coalesce(joined[[paste0(.x, suffix[1])]],
+                                                joined[[paste0(.x, suffix[2])]]))
+    
+    names(coalesced) <- to_coalesce
+    
+    bind_cols(joined, coalesced)[cols]
 }
 
 
@@ -122,7 +168,9 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv") %>%
                최근CT검사일 = as.character(최근CT검사일),
                최근MRI검사일 = as.character(최근MRI검사일),
                최근PET검사일 = as.character(최근PET검사일),
-               최종학력 = as.character(최종학력)) %>% 
+               최종학력 = as.character(최종학력),
+               `CDR 시행날짜` = 최근신경인지검사일,
+               `MMSE 시행날짜` = 최근신경인지검사일) %>% 
     drop_na(No) %>% 
     rename(id = No)
 
@@ -193,52 +241,6 @@ master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv")
 
 
 # Preprocess 2020-09-07 Karyotype Data ------------------------------------
-preprocess_karyotype_data <- function(data) {
-    result <- data %>% 
-        drop_na(식별코드) %>% 
-        select(-c(병원명, 환자명, 검체, 우선순위, Karyotype,
-                     결과상세)) %>% 
-        separate(`성별/나이`, c("gender", "age"), "/") %>% 
-        rename(management_number = 1,
-               registration_date = 2,
-               id = 3,
-               abnormal_chromosome = 6,
-               abnormal_sex_chromosome = 7,
-               klinefelter = 8,
-               turner = 9,
-               xxx = 10,
-               abnormal_autosome = 11,
-               include_marker_chromosome = 12) %>% 
-        mutate(registration_date = ymd(registration_date),
-               id = str_replace(id, "'", ""),
-               gender = recode(gender, 남 = "Male", 여 = "Female"),
-               age = as.integer(age),
-               karyotype = TRUE) %>% 
-        replace_na(list(abnormal_chromosome = 0, abnormal_sex_chromosome = 0,
-                        klinefelter = 0, turner = 0, xxx = 0,
-                        abnormal_autosome = 0, include_marker_chromosome = 0))
-    
-    return(result)
-}
-
-coalesce_join <- function(x, y, by, join, suffix = c(".x", ".y")) {
-    joined <- join(x, y, by = by)
-    
-    cols <- union(names(x), names(y))
-    
-    to_coalesce <- names(joined)[!names(joined) %in% cols]
-    suffix_used <- suffix[ifelse(endsWith(to_coalesce, suffix[1]), 1, 2)]
-    
-    to_coalesce <- unique(substr(to_coalesce, 1, nchar(to_coalesce) - nchar(suffix_used)))
-    
-    coalesced <- map_dfc(to_coalesce, ~coalesce(joined[[paste0(.x, suffix[1])]],
-                                                joined[[paste0(.x, suffix[2])]]))
-    
-    names(coalesced) <- to_coalesce
-    
-    bind_cols(joined, coalesced)[cols]
-}
-
 master_df_t2_v4 <- coalesce_join(master_df_t2_v3,
                                  preprocess_karyotype_data(
                                      read_csv("data/material/karyotype_patient_20200907.csv")
@@ -288,41 +290,3 @@ master_df_t2_v4 <- master_df_t2_v3 %>%
     select(-registration_date.y)
 
 write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
-
-
-# Create ApoE Plot --------------------------------------------------------
-plot_dataframe <- m_apoe_df %>% 
-    select(id, Coordinate, dementia) %>% 
-    mutate(dementia = recode(dementia, `1` = TRUE, `0` = FALSE)) %>% 
-    # Recode function does not work on numeric vector. Use grave accent.
-    distinct() %>% 
-    group_by(dementia, Coordinate) %>% 
-    summarize(n = n()) %>% 
-    mutate(Coordinate = as.character(Coordinate)) %>%
-    group_by(Coordinate) %>% 
-    mutate(proportion = n / sum(n)) %>% 
-    as.data.table()
-
-asterisk_dataframe <- plot_dataframe %>% 
-    select(-n) %>% 
-    spread(key = dementia, value = proportion) %>% 
-    replace(is.na(.), 0) %>% 
-    rename(normal_prop = 2, patient_prop = 3) %>% 
-    mutate(asterisk = patient_prop > normal_prop)
-
-apoe_plot <- ggplot(data = plot_dataframe, aes(x = reorder(Coordinate, -n), y = n, fill = dementia)) +
-    geom_bar(stat = "identity", position = "stack") +
-    geom_text(aes(label = round(proportion, 2)), position = position_stack(vjust = 0.5)) +
-    labs(x = "Coordinate", y = "The Number of Patients")
-
-for (i in 1:nrow(asterisk_dataframe)) {
-    if (asterisk_dataframe$asterisk[i] == TRUE) {
-        coordinate <- asterisk_dataframe$Coordinate[i]
-        apoe_plot <- apoe_plot +
-            annotate("text",
-                     x = coordinate,
-                     y = plot_dataframe[Coordinate == coordinate, sum(n)] + 5,
-                     label = "*")
-    }
-}
-ggsave("ApoE_Count_by_Coordinate.png", apoe_plot)
