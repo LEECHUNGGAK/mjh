@@ -175,3 +175,23 @@ for (measurement_var in c("zbmi", "HBA1C")) {
     }
 }
 sink()
+
+
+# Calculate Weighted Mean -------------------------------------------------
+result_df <- data.frame()
+
+for (hospital_var in c("snubh", "snuh", "amc")) {
+    temp_df <- read_csv(file.path(hospital_var, "analyze_first/result.csv")) %>% 
+        mutate(hospital = hospital_var)
+    
+    result_df <- bind_rows(result_df, temp_df)
+}
+
+weighted_mean_df <- result_df %>% 
+    group_by(measurement, time, dm, group) %>% 
+    summarize(sum_baseline = sum(sum_baseline),
+              sum_followup = sum(sum_followup),
+              n = sum(n),
+              weighted_mean_baseline = sum_baseline / n,
+              weighted_mean_followup = sum_followup / n)
+write_excel_csv(weighted_mean_df, "weighted_mean.csv")
