@@ -9,27 +9,27 @@ process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
                              read_excel(i) %>% 
                                  filter(Gene == gene) %>% 
                                  select(Variant, Coordinate, Genotype, Exonic, Consequence) %>% 
-                                 mutate(id = str_extract(i, "(N|P)-\\d+")))
+                                 mutate(master_id = str_extract(i, "(N|P)-\\d+")))
     }
     
-    result_df <- data.frame(id = str_replace(file_v, ".xls", ""),
+    result_df <- data.frame(master_id = str_replace(file_v, ".xls", ""),
                             Coordinate = rep(unique(temp_df$Coordinate),
                                              each = length(file_v))) %>% 
-        left_join(temp_df, by = c("id", "Coordinate")) %>% 
-        arrange(id) %>% 
+        left_join(temp_df, by = c("master_id", "Coordinate")) %>% 
+        arrange(master_id) %>% 
         replace_na(list(Variant = "normal", Genotype = "homozygous wild type", Exonic = "no")) %>% 
         mutate(Consequence_value = 1,
                Genotype = recode(Genotype, hom = "homozygous mutant type",
                                  het = "heterozygous mutant type")) %>% 
         spread(key = Consequence, value = Consequence_value, fill = 0) %>% 
         select(-`<NA>`) %>% 
-        mutate(dementia = ifelse(str_sub(id, 1, 1) == "N", 0, 1))
+        mutate(dementia = ifelse(str_sub(master_id, 1, 1) == "N", 0, 1))
     
     if (gene == "APOE") {
         result_df <- result_df %>% 
             left_join(read_csv("data/material/APOE_genotyping_data.csv") %>% 
-                          rename(id = 1, apoe = 2),
-                      by = "id") %>% 
+                          rename(master_id = 1, apoe = 2),
+                      by = "master_id") %>% 
             mutate(g_carrier = ifelse(Variant != "normal" & 
                                           str_detect(str_sub(Variant, 3), "G"),
                                       1, 0),
@@ -56,11 +56,12 @@ top3b_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
 top3b_df <- read_csv("data/ngs/top3b_data.csv")
 
 p_top3b_df <- top3b_df %>% 
-    select(id, dementia, Coordinate, Variant) %>% 
+    select(master_id, dementia, Coordinate, Variant) %>% 
     mutate(Coordinate = paste0("coordinate_", Coordinate),
            Variant = ifelse(Variant == "normal", 0, 1)) %>% 
     spread(Coordinate, Variant) %>% 
     mutate(n_variant = rowSums(.[, 3:ncol(.)]))
+write_excel_csv(p_top3b_df, "data/ngs/top3b_wide.csv")
 
 # Draw a Graph
 plot_df <- top3b_df %>% 
@@ -150,3 +151,41 @@ apoe_df_t2 <- apoe_df %>%
            e4_hom = ifelse(apoe == "E4/E4", 1, 0)) %>% 
     select(id, dementia, starts_with("g_"), starts_with("e4_"))
 write_excel_csv(apoe_df_t2, "data/apoe_data_t2.csv")
+
+
+# Create ApoE Plot --------------------------------------------------------
+plot_dataframe <- m_apoe_df %>% 
+    select(id, Coordinate, dementia) %>% 
+    mutate(dementia = recode(dementia, `1` = TRUE, `0` = FALSE)) %>% 
+    # Recode function does not work on numeric vector. Use grave accent.
+    distinct() %>% 
+    group_by(dementia, Coordinate) %>% 
+    summarize(n = n()) %>% 
+    mutate(Coordinate = as.character(Coordinate)) %>%
+    group_by(Coordinate) %>% 
+    mutate(proportion = n / sum(n)) %>% 
+    as.data.table()
+
+asterisk_dataframe <- plot_dataframe %>% 
+    select(-n) %>% 
+    spread(key = dementia, value = proportion) %>% 
+    replace(is.na(.), 0) %>% 
+    rename(normal_prop = 2, patient_prop = 3) %>% 
+    mutate(asterisk = patient_prop > normal_prop)
+
+apoe_plot <- ggplot(data = plot_dataframe, aes(x = reorder(Coordinate, -n), y = n, fill = dementia)) +
+    geom_bar(stat = "identity", position = "stack") +
+    geom_text(aes(label = round(proportion, 2)), position = position_stack(vjust = 0.5)) +
+    labs(x = "Coordinate", y = "The Number of Patients")
+
+for (i in 1:nrow(asterisk_dataframe)) {
+    if (asterisk_dataframe$asterisk[i] == TRUE) {
+        coordinate <- asterisk_dataframe$Coordinate[i]
+        apoe_plot <- apoe_plot +
+            annotate("text",
+                     x = coordinate,
+                     y = plot_dataframe[Coordinate == coordinate, sum(n)] + 5,
+                     label = "*")
+    }
+}
+ggsave("ApoE_Count_by_Coordinate.png", apoe_plot)

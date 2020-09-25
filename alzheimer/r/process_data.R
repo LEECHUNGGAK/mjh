@@ -124,26 +124,18 @@ master_dataframe <- master_dataframe %>%
     drop_na(id)
 
 # write_excel_csv(master_dataframe, "data/master_data.csv")
-
-master_dataframe <- read_csv("data/master_data.csv")
+# master_dataframe <- read_csv("data/master_data.csv")
 
 # Master Data Type 2
 # Exclude combinations of coordinate
+top3b_wide_df <- read_csv("data/ngs/top3b_wide.csv")
+
 master_df_t2 <- master_target_dataframe %>% 
     bind_rows(master_comparator_dataframe) %>% 
     mutate(master = TRUE)
 
 master_df_t2 <- process_master_data(master_df_t2,
                                     years_of_education = TRUE)
-
-master_df_t2 <- master_df_t2 %>% 
-    rename(id = No) %>% 
-    full_join(top3b_major_coo_dataframe %>% 
-                  mutate(top3b = TRUE),
-              by = "id") %>% 
-    mutate(dementia = ifelse(str_sub(id, 1, 1) == "N", 0, 1)) %>% 
-    relocate(dementia, .after = presence_22312351) %>% 
-    drop_na(id)
 
 write_excel_csv(master_df_t2, "data/master_data_t2.csv")
 
@@ -172,13 +164,15 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv") %>%
                `CDR 시행날짜` = 최근신경인지검사일,
                `MMSE 시행날짜` = 최근신경인지검사일) %>% 
     drop_na(No) %>% 
-    rename(id = No)
+    rename(id = No,
+           patient_id = 병록번호)
 
 cancerrop_df <- process_master_data(cancerrop_df)
 
 master_df_t2_v2 <- master_df_t2 %>% 
-    bind_rows(cancerrop_df %>% 
-                  mutate(cancerrop = TRUE))
+    full_join(cancerrop_df %>% 
+                  mutate(cancerrop = TRUE),
+              by = "patient_id")
 
 write_excel_csv(master_df_t2_v2, "data/master_data_t2_v2.csv")
 
