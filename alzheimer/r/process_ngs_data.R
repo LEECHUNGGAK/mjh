@@ -118,9 +118,18 @@ zero_col <- names(col_sum)[col_sum == 0]
 
 p_combn_top3b_df <- combn_top3b_df %>% 
     select(-zero_col)
-write_csv(p_combn_top3b_df, "data/comb_top3b_data.csv")
+write_csv(p_comb_top3b_df, "data/ngs/combn_top3b_data.csv")
 
-combn_top3b_df <- read_csv("data/comb_top3b_data.csv")
+combn_top3b_df <- read_csv("data/ngs/combn_top3b_data.csv")
+
+col_sums <- combn_top3b_df %>% 
+    select(-c(id, dementia, n_variant)) %>% 
+    colSums()
+
+pp_combn_top3b_df <- combn_top3b_df %>% 
+    select(id, dementia, names(col_sums)[col_sums >= 5])
+
+write_excel_csv(pp_combn_top3b_df, "data/ngs/pp_combn_top3b_data.csv")
 
 col_sum_df <- as.data.frame(col_sum) %>% 
     arrange(desc(col_sum)) %>% 
