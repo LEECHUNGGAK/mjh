@@ -3,7 +3,6 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 
 library(tidyverse)
 library(lubridate)
-library(readxl)
 
 
 # Functions -------------------------------------------
@@ -96,12 +95,14 @@ coalesce_join <- function(x, y, by, join, suffix = c(".x", ".y")) {
 
 
 # Manipulate Master Data -------------------------------------------------------------
-master_target_dataframe <- read_csv("data/material/master_target.csv")
+master_target_dataframe <- read_csv("data/material/master_target.csv",
+                                    col_types = cols(.default = "c")) %>% 
+    mutate(No = str_replace(No, "^P_", "P-"),
+           나이new = floor((ymd(등재일) - ymd(생년월일)) / 365))
 master_comparator_dataframe <- read_csv("data/material/master_comparator.csv",
-                                        col_types = cols(MMSE = col_character(),
-                                                         CDR = col_character(),
-                                                         GDS = col_character()))
+                                        col_types = cols(.default = "c"))
 
+# Master Data Type 1
 master_dataframe <- master_target_dataframe %>% 
     mutate(Dementia_a = TRUE) %>% 
     bind_rows(master_comparator_dataframe %>% 
@@ -222,14 +223,15 @@ master_df_t2_v2 <- master_df_t2 %>%
                            as.character(외래방문일자.x)),
            SBP = paste0(SBP.x, "\n", SBP.y),
            DBP = paste0(DBP.x, "\n", DBP.y),
-           맥박 = ifelse(!is.na(맥박), paste0(맥박.x, "\n", 맥박.y), 맥박.x),
+           맥박 = ifelse(!is.na(맥박.y), paste0(맥박.x, "\n", 맥박.y), 맥박.x),
            dementia = dementia.x) %>% 
     select(-ends_with(".x"), -ends_with(".y")) %>% 
     bind_rows(master_df_t2 %>% 
                   filter(!patient_id %in% cancerrop_inner_df$patient_id) %>% 
                   mutate(SBP = as.character(SBP),
                          DBP = as.character(DBP),
-                         맥박 = as.character(맥박))) %>% 
+                         맥박 = as.character(맥박),
+                         cancerrop = TRUE)) %>% 
     bind_rows(cancerrop_outer_df)
 
 master_df_t2_v2 <- master_df_t2_v2 %>% 
@@ -278,7 +280,8 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
 
 master_df_t2_v3 <- master_df_t2_v2 %>% 
     left_join(karyotype_dataframe %>% 
-                  mutate(karyotype = TRUE),
+                  mutate(karyotype = TRUE,
+                         registration_date = as.character(registration_date)),
               by = "id") %>% 
     mutate(registration_date.x = ifelse(is.na(registration_date.x),
                                         registration_date.y,
