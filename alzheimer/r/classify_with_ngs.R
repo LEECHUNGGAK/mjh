@@ -1,6 +1,8 @@
 # Set Environment ---------------------------------------------------------
 library(tidyverse)
+library(ROCR)
 library(caret)
+library(epiR)
 
 setwd("C:/Users/Administrator/wd/alzheimer")
 
@@ -24,55 +26,92 @@ working_df <- top3b_df %>%
 
 
 # Drow ROC Curve ----------------------------------------------------------
-t1_df <- working_df %>% 
-    drop_na(predictions_t1)
-t2_df <- working_df %>% 
-    drop_na(predictions_t2)
-
-t3_df <- working_df %>% 
-    drop_na(predictions_t3)
-
-pred_t1 <- prediction(t1_df$predictions_t1, t1_df$dementia)
-pred_t2 <- prediction(t2_df$predictions_t2, t2_df$dementia)
-pred_t3 <- prediction(t2_df$predictions_t3, t2_df$dementia)
+pred_t1 <- prediction(working_df$predictions_t1, working_df$dementia)
+pred_t2 <- prediction(working_df$predictions_t2, working_df$dementia)
+pred_t3 <- prediction(working_df$predictions_t3, working_df$dementia)
 
 perf_t1 <- performance(pred_t1, "tpr", "fpr")
 perf_t2 <- performance(pred_t2, "tpr", "fpr")
+perf_t3 <- performance(pred_t3, "tpr", "fpr")
 
 plot_path <- "output/roc_curve"
 
 png(file.path(plot_path, "t1.png"))
 plot(perf_t1)
 title("TOP3B 3 SNV + APOE 4 Carrier")
+legend("bottomright",
+       paste("AUC:", round(performance(pred_t1, "auc")@y.values[[1]], 4)))
 dev.off()
 
 png(file.path(plot_path, "t2.png"))
 plot(perf_t2)
 title("TOP3B 3 SNV + APOE 4 Carrier + GG Homozygote")
-dev.off()
-
-png(file.path(plot_path, "t1_t2.png"))
-plot(perf_t1)
-plot(perf_t2, add = TRUE, lty = "dashed")
 legend("bottomright",
-       c("TOP3B 3 SNV + APOE 4 Carrier",
-         "TOP3B 3 SNV + APOE 4 Carrier + GG homozygote"),
-       lty = c("solid", "dashed"))
+       paste("AUC:", round(performance(pred_t2, "auc")@y.values[[1]], 4)))
 dev.off()
 
-# Calculate AUC
-performance(pred_t1, "auc")@y.values
-performance(pred_t2, "auc")@y.values
-performance(pred_t3, "auc")@y.values
+png(file.path(plot_path, "t3.png"))
+plot(perf_t2)
+title("TOP3B 3 SNV")
+legend("bottomright",
+       paste("AUC:", round(performance(pred_t3, "auc")@y.values[[1]], 4)))
+dev.off()
+
+png(file.path(plot_path, "t1_t2_t3.png"))
+plot(perf_t1, lty = "longdash")
+plot(perf_t2, add = TRUE, lty = "dotted")
+plot(perf_t3, add = TRUE)
+legend("right",
+       c(paste0("TOP3B 3 SNV\n(AUC: ",
+               round(performance(pred_t3, "auc")@y.values[[1]], 4),
+               ")"), 
+         paste0("TOP3B 3 SNV\n+ APOE 4 Carrier\n(AUC: ",
+               round(performance(pred_t1, "auc")@y.values[[1]], 4),
+               ")"),
+         paste0("TOP3B 3 SNV\n+ APOE 4 Carrier\n+ GG homozygote\n(AUC: ",
+               round(performance(pred_t2, "auc")@y.values[[1]], 4),
+               ")")),
+       lty = c("solid", "longdash", "dotted"))
+dev.off()
 
 
 # Confusion Matrix --------------------------------------------------------
+epi.tests(table(working_df$predictions_t1, working_df$dementia))
 confusionMatrix(data = as.factor(working_df$predictions_t1),
                 reference = as.factor(working_df$dementia),
                 positive = "1")
+
+epi.tests(table(working_df$predictions_t2, working_df$dementia))
 confusionMatrix(data = as.factor(working_df$predictions_t2),
                 reference = as.factor(working_df$dementia),
                 positive = "1")
+
+epi.tests(table(working_df$predictions_t3, working_df$dementia))
 confusionMatrix(data = as.factor(working_df$predictions_t3),
                 reference = as.factor(working_df$dementia),
+                positive = "1")
+
+
+# Cancerrop ---------------------------------------------------------------
+cancerrop_df <- top3b_df %>% 
+    select(id, dementia, n_variant) %>% 
+    mutate(predictions = ifelse(n_variant >= 3, 1, 0))
+
+pred_cancerrop <- prediction(cancerrop_df$predictions, working_df$dementia)
+
+perf_cancerrop <- performance(pred_cancerrop, "tpr", "fpr")
+perf_cancerrop <- performance(pred_cancerrop, "tpr", "fpr")
+
+plot_path <- "output/roc_curve"
+
+png(file.path(plot_path, "cancerrop.png"))
+plot(perf_cancerrop)
+legend("bottomright",
+       paste("AUC:", round(performance(pred_cancerrop, "auc")@y.values[[1]], 4)))
+dev.off()
+
+
+# Confusion Matrix
+confusionMatrix(data = as.factor(cancerrop_df$predictions),
+                reference = as.factor(cancerrop_df$dementia),
                 positive = "1")

@@ -17,11 +17,16 @@ work_df <- raw_df %>%
            abnormal_sex_chromosome = ifelse(abnormal_sex_chromosome == 0, FALSE, TRUE),
            turner = ifelse(turner == 0, FALSE, TRUE),
            xxx = ifelse(xxx == 0, FALSE, TRUE),
-           presence_major = ifelse(presence_major == 0, FALSE, TRUE))
+           top3b_three_snv = ifelse(top3b_three_snv == 0, FALSE, TRUE))
 
 for (measurement_var in c("MMSE", 'CDR sum of box')) {
+    if (measurement_var == "MMSE") {
+        ylim <- c(0, 30)
+    } else {
+        ylim <- c(0, 18)
+    }
     for (condition_var in c("abnormal_chromosome", "abnormal_sex_chromosome", "turner", "xxx",
-                "presence_major")) {
+                "top3b_three_snv")) {
         plot_df <- work_df %>% 
             filter(measurement == measurement_var) %>% 
             drop_na(condition_var)
@@ -32,8 +37,10 @@ for (measurement_var in c("MMSE", 'CDR sum of box')) {
             geom_line(aes_string(color = condition_var, group = "id")) +
             scale_y_continuous(breaks = seq(ceiling(min(work_df$measurement_value)),
                                             ceiling(max(work_df$measurement_value)),
-                                            by = 2)) +
+                                            by = 1)) +
             scale_color_manual(breaks = c(FALSE, TRUE), values = c("blue", "red")) +
+            coord_cartesian(ylim = ylim, expand = FALSE) +
+            theme_bw() +
             theme(legend.position = "bottom")
         ggsave(paste0("output/plots/", measurement_var, "_", condition_var, "_paired.png"))
         
@@ -43,8 +50,10 @@ for (measurement_var in c("MMSE", 'CDR sum of box')) {
             geom_smooth(aes_string(color = condition_var), method = "lm") +
             scale_y_continuous(breaks = seq(ceiling(min(work_df$measurement_value)),
                                             ceiling(max(work_df$measurement_value)),
-                                            by = 2)) +
+                                            by = 1)) +
             scale_color_manual(breaks = c(FALSE, TRUE), values = c("blue", "red")) +
+            coord_cartesian(ylim = ylim, expand = FALSE) +
+            theme_bw() +
             theme(legend.position = "bottom")
         ggsave(paste0("output/plots/", measurement_var, "_", condition_var, "_lm.png"))
     }

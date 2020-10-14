@@ -97,8 +97,7 @@ coalesce_join <- function(x, y, by, join, suffix = c(".x", ".y")) {
 # Manipulate Master Data -------------------------------------------------------------
 master_target_dataframe <- read_csv("data/material/master_target.csv",
                                     col_types = cols(.default = "c")) %>% 
-    mutate(No = str_replace(No, "^P_", "P-"),
-           나이new = floor((ymd(등재일) - ymd(생년월일)) / 365))
+    mutate(No = str_replace(No, "^P_", "P-"))
 master_comparator_dataframe <- read_csv("data/material/master_comparator.csv",
                                         col_types = cols(.default = "c"))
 
@@ -133,15 +132,15 @@ master_dataframe <- master_dataframe %>%
 
 # Master Data Type 2
 # Exclude combinations of coordinate
-top3b_wide_df <- read_csv("data/ngs/top3b_wide.csv") %>% 
-    rename(id = master_id)
+top3b_wide_df <- read_csv("data/ngs/top3b_data_t2.csv")
 
 master_df_t2 <- master_target_dataframe %>% 
     mutate(dementia = 1) %>% 
     bind_rows(master_comparator_dataframe %>% 
                   mutate(dementia = 0)) %>% 
     mutate(master = TRUE,
-           성별 = recode(성별, M = "Male", F = "Female")) %>% 
+           성별 = recode(성별, M = "Male", F = "Female"),
+           age = ifelse(is.na(생년월일), 나이, floor((ymd(등재일) - ymd(생년월일)) / 365))) %>% 
     select(-c(나이, `MMSE 시행날짜`, `CDR 시행날짜`)) %>% 
     rename(id = No, registration_date = 등재일, gender = 성별,
            birth_date = 생년월일, patient_id = 병록번호, 
@@ -151,9 +150,7 @@ master_df_t2 <- master_target_dataframe %>%
                   mutate(top3b_three_snv = ifelse(
                       coordinate_22312315 + coordinate_22312350 + coordinate_22312351 == 3,
                       1,
-                      ifelse(coordinate_22312315 + coordinate_22312350 + coordinate_22312351 == 0,
-                             0, NA)
-                  )) %>% 
+                      0)) %>% 
                   select(id, top3b_three_snv),
               by = "id")
 
@@ -179,7 +176,6 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv") %>%
                   rename(최근CT검사일 = CT검사일,
                            최근MRI검사일 = MRI검사일)) %>% 
     drop_na(No) %>% 
-    select(-c(나이, `MMSE 시행날짜`, `CDR 시행날짜`)) %>% 
     rename(cancerrop_id = No,
            cancerrop_registration_date = 등재일,
            patient_id = 병록번호,
@@ -189,7 +185,11 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv") %>%
            CDR_SOB = `CDR_Sum of box`) %>% 
     mutate(patient_id = as.character(patient_id),
            birth_date = as.character(ymd(paste0("19", birth_date))),
-           gender = recode(gender, M = "Male", F = "Female"))
+           gender = recode(gender, M = "Male", F = "Female"),
+           age = ifelse(is.na(birth_date),
+                        나이,
+                        floor((ymd(cancerrop_registration_date) - ymd(birth_date)) / 365))) %>% 
+    select(-c(나이, `MMSE 시행날짜`, `CDR 시행날짜`))
 
 cancerrop_inner_df <- cancerrop_df %>% 
     filter(patient_id %in% master_df_t2$patient_id) %>% 
@@ -199,14 +199,16 @@ cancerrop_inner_df <- cancerrop_df %>%
 
 cancerrop_outer_df <- cancerrop_df %>% 
     filter(!patient_id %in% master_df_t2$patient_id) %>% 
-    mutate(외래방문일자 = as.character(외래방문일자),
-                 최근CT검사일 = as.character(최근CT검사일),
-                 최근MRI검사일 = as.character(최근MRI검사일),
-                 최근PET검사일 = as.character(최근PET검사일),
-                 최종학력 = as.character(최종학력),
-                 SBP = as.character(SBP),
-                 DBP = as.character(DBP),
-                 맥박 = as.character(맥박)) %>% 
+    mutate(id = cancerrop_id,
+           age = as.character(age),
+           외래방문일자 = as.character(외래방문일자),
+           최근CT검사일 = as.character(최근CT검사일),
+           최근MRI검사일 = as.character(최근MRI검사일),
+           최근PET검사일 = as.character(최근PET검사일),
+           최종학력 = as.character(최종학력),
+           SBP = as.character(SBP),
+           DBP = as.character(DBP),
+           맥박 = as.character(맥박)) %>% 
     process_master_data()
 
 master_df_t2_v2 <- master_df_t2 %>% 
