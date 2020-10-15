@@ -151,7 +151,8 @@ master_df_t2 <- master_target_dataframe %>%
                       coordinate_22312315 + coordinate_22312350 + coordinate_22312351 == 3,
                       1,
                       0)) %>% 
-                  select(id, top3b_three_snv),
+                  select(id, coordinate_22312315, coordinate_22312350,
+                         coordinate_22312351, top3b_three_snv),
               by = "id")
 
 master_df_t2 <- process_master_data(master_df_t2,

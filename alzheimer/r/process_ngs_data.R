@@ -1,3 +1,10 @@
+# Set Environment ---------------------------------------------------------
+library(tidyverse)
+library(readxl)
+
+setwd("C:/Users/Administrator/wd/alzheimer")
+
+
 # Functions ---------------------------------------------------------------
 process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
     file_v <- str_remove(list.files(data_file_path), ".xls$")
@@ -9,27 +16,27 @@ process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
                              read_excel(i) %>% 
                                  filter(Gene == gene) %>% 
                                  select(Variant, Coordinate, Genotype, Exonic, Consequence) %>% 
-                                 mutate(master_id = str_extract(i, "(N|P)-\\d+")))
+                                 mutate(id = str_extract(i, "(N|P)-\\d+")))
     }
     
-    result_df <- data.frame(master_id = str_replace(file_v, ".xls", ""),
+    result_df <- data.frame(id = str_replace(file_v, ".xls", ""),
                             Coordinate = rep(unique(temp_df$Coordinate),
                                              each = length(file_v))) %>% 
-        left_join(temp_df, by = c("master_id", "Coordinate")) %>% 
-        arrange(master_id) %>% 
+        left_join(temp_df, by = c("id", "Coordinate")) %>% 
+        arrange(id) %>% 
         replace_na(list(Variant = "normal", Genotype = "homozygous wild type", Exonic = "no")) %>% 
         mutate(Consequence_value = 1,
                Genotype = recode(Genotype, hom = "homozygous mutant type",
                                  het = "heterozygous mutant type")) %>% 
         spread(key = Consequence, value = Consequence_value, fill = 0) %>% 
         select(-`<NA>`) %>% 
-        mutate(dementia = ifelse(str_sub(master_id, 1, 1) == "N", 0, 1))
+        mutate(dementia = ifelse(str_sub(id, 1, 1) == "N", 0, 1))
     
     if (gene == "APOE") {
         result_df <- result_df %>% 
             left_join(read_csv("data/material/APOE_genotyping_data.csv") %>% 
-                          rename(master_id = 1, apoe = 2),
-                      by = "master_id") %>% 
+                          rename(id = 1, apoe = 2),
+                      by = "id") %>% 
             mutate(g_carrier = ifelse(Variant != "normal" & 
                                           str_detect(str_sub(Variant, 3), "G"),
                                       1, 0),
@@ -53,15 +60,15 @@ top3b_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
                              result_file_path = "data/ngs/top3b_data.csv",
                              gene = "TOP3B")
 
-top3b_df <- read_csv("data/ngs/top3b_data.csv")
+top3b_df <- read_csv("data/ngs/top3b.csv")
 
-p_top3b_df <- top3b_df %>% 
-    select(master_id, dementia, Coordinate, Variant) %>% 
+top3b_t2_df <- top3b_df %>% 
+    select(id, dementia, Coordinate, Variant) %>% 
     mutate(Coordinate = paste0("coordinate_", Coordinate),
            Variant = ifelse(Variant == "normal", 0, 1)) %>% 
     spread(Coordinate, Variant) %>% 
     mutate(n_variant = rowSums(.[, 3:ncol(.)]))
-write_excel_csv(p_top3b_df, "data/ngs/top3b_wide.csv")
+write_excel_csv(top3b_t2_df, "data/ngs/top3b_t2.csv")
 
 # Draw a Graph
 plot_df <- top3b_df %>% 
@@ -87,7 +94,7 @@ p_top3b_df %>%
 ggsave("top3b_n_variant.png")
 
 # Make Coordinate Combination DataFrame
-combn_top3b_df <- p_top3b_df
+combn_top3b_df <- top3b_t2_df
 for (i in 3:1) {
     combn_mat <- combn(unique(top3b_df$Coordinate), i)
     
