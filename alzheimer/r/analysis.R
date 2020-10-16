@@ -6,97 +6,46 @@ library(rlang)
 setwd("C:/Users/Administrator/wd/alzheimer")
 
 
-# ApoE chisq.test ---------------------------------------------------------
-apoe_df <- read_csv("data/ngs/apoe_data.csv")
-
-work_df <- apoe_df %>% 
-    filter(Coordinate == 45409167)
-
-sink("ApoE_Chisq_Test.txt")
-for (i in c("g_carrier", "g_hom")) {
-    temp <- table(work_df %>% 
-                      pull(dementia),
-                  work_df %>% 
-                      pull(i))
-    rownames(temp) <- c("Normal", "Dementia")
-    colnames(temp) <- c("Normal", i)
-    
-    print(i)
-    print(temp)
-    print(chisq.test(temp))
-}
-sink()
-
-for (i in colnames(long_apoe_df)[8:ncol(long_apoe_df)]) {
-    temp <- table(long_apoe_df %>% 
-                      pull(dementia),
-                  long_apoe_df %>% 
-                      pull(i))
-    rownames(temp) <- c("Normal", "Dementia")
-    colnames(temp) <- c("Normal", "SNV")
-    
-    print(i)
-    print(temp)
-    print(chisq.test(temp))
-}
-sink()
-
-apoe_df <- read_csv("data/m_apoe_data.csv")
-
-# Check the Variant
-apoe_df %>% 
-    filter(Coordinate == 45409167 & Genotype == "hom") %>% 
-    distinct(Variant)
-
-apoe_genotype <- table(apoe_df %>% 
-                           filter(Coordinate == 45409167) %>% 
-                           distinct(id, Genotype, dementia) %>% 
-                           pull(dementia),
-                       apoe_df %>% 
-                           filter(Coordinate == 45409167) %>% 
-                           distinct(id, Genotype, dementia) %>% 
-                           pull(Genotype))
-print(apoe_genotype)
-print(chisq.test(apoe_genotype))
-
-
-# Function --------------------------------------
+# Functions --------------------------------------
 process_measurement_data <- function(data) {
     result <- data %>%
-        select(id, registration_date, dementia, mmse_date, MMSE,
+        select(id, registration_date, dementia, measurement_date, MMSE,
                abnormal_chromosome, abnormal_sex_chromosome, turner, xxx,
-               age, gender, presence_major, apoe_e4) %>% 
-        separate_rows(MMSE, mmse_date, sep = "\n") %>% 
+               age, gender, top3b_three_snv, apoe_e4) %>% 
+        separate_rows(MMSE, measurement_date, sep = "\n") %>% 
         mutate(measurement = "MMSE",
                MMSE = as.double(MMSE),
-               mmse_date = ymd(mmse_date),
-               diff_btw_re_and_me = difftime(mmse_date, registration_date, units = "days")) %>% 
+               measurement_date = ymd(measurement_date),
+               diff_btw_re_and_me = difftime(measurement_date, registration_date, units = "days")) %>% 
         group_by(id) %>% 
         mutate(rank = dense_rank(interaction(diff_btw_re_and_me,
-                                             mmse_date,
-                                             lex.order = TRUE)),
-               diff_btw_me = difftime(mmse_date, lag(mmse_date), units = "days")) %>% 
-        rename(measurement_date = mmse_date,
+                                             measurement_date,
+                                             lex.order = TRUE))) %>% 
+        arrange(id, rank) %>% 
+        mutate(diff_btw_me = difftime(measurement_date, lag(measurement_date), units = "days")) %>% 
+        rename(measurement_date = measurement_date,
                measurement_value = MMSE) %>% 
         bind_rows(data %>%
-                      select(id, registration_date, dementia, cdr_date,
-                             cdr_sum_of_box, abnormal_chromosome,
+                      select(id, registration_date, dementia, measurement_date,
+                             CDR_SOB, abnormal_chromosome,
                              abnormal_sex_chromosome, turner, xxx,
-                             age, gender, presence_major, apoe_e4) %>% 
-                      separate_rows(cdr_sum_of_box, cdr_date, sep = "\n") %>% 
-                      filter(!is.na(cdr_sum_of_box) & cdr_sum_of_box != "ND") %>% 
+                             age, gender, top3b_three_snv, apoe_e4) %>% 
+                      separate_rows(CDR_SOB, measurement_date, sep = "\n") %>% 
+                      filter(!is.na(CDR_SOB) & CDR_SOB != "ND") %>% 
                       mutate(measurement = "CDR sum of box",
-                             cdr_sum_of_box = as.double(cdr_sum_of_box),
-                             cdr_date = ymd(cdr_date),
-                             diff_btw_re_and_me = difftime(cdr_date, registration_date, units = "days")) %>% 
+                             CDR_SOB = as.double(CDR_SOB),
+                             measurement_date = ymd(measurement_date),
+                             diff_btw_re_and_me = difftime(measurement_date, registration_date, units = "days")) %>% 
                       group_by(id) %>% 
                       mutate(rank = dense_rank(interaction(diff_btw_re_and_me,
-                                                           cdr_date,
-                                                           lex.order = TRUE)),
-                             diff_btw_me = difftime(cdr_date, lag(cdr_date), units = "days")) %>% 
-                      rename(measurement_date = cdr_date,
-                             measurement_value = cdr_sum_of_box)) %>% 
+                                                           measurement_date,
+                                                           lex.order = TRUE))) %>% 
+                      arrange(id, rank) %>% 
+                      mutate(diff_btw_me = difftime(measurement_date, lag(measurement_date), units = "days")) %>% 
+                      rename(measurement_date = measurement_date,
+                             measurement_value = CDR_SOB)) %>% 
         group_by(id, measurement) %>% 
+        arrange(id, rank) %>% 
         mutate(delta = measurement_value - lag(measurement_value),
                delta_per_month = delta /
                    (as.integer(diff_btw_me) / 365))
@@ -205,11 +154,11 @@ run_analysis <- function(data, file_name, condition, top3b = FALSE) {
     measurement_data <- process_measurement_data(data)
     
     if (top3b) {
-        discrete_variables_v <- c(discrete_variables_v, "presence_major")
+        discrete_variables_v <- c(discrete_variables_v, "top3b_three_snv")
         
         measurement_data <- measurement_data %>% 
             left_join(data %>% 
-                          select(id, presence_major),
+                          select(id, top3b_three_snv),
                       by = "id")
     }
     
@@ -226,8 +175,64 @@ run_analysis <- function(data, file_name, condition, top3b = FALSE) {
 }
 
 
+# ApoE chisq.test ---------------------------------------------------------
+apoe_df <- read_csv("data/ngs/apoe_data.csv")
+
+work_df <- apoe_df %>% 
+    filter(Coordinate == 45409167)
+
+sink("ApoE_Chisq_Test.txt")
+for (i in c("g_carrier", "g_hom")) {
+    temp <- table(work_df %>% 
+                      pull(dementia),
+                  work_df %>% 
+                      pull(i))
+    rownames(temp) <- c("Normal", "Dementia")
+    colnames(temp) <- c("Normal", i)
+    
+    print(i)
+    print(temp)
+    print(chisq.test(temp))
+}
+sink()
+
+for (i in colnames(long_apoe_df)[8:ncol(long_apoe_df)]) {
+    temp <- table(long_apoe_df %>% 
+                      pull(dementia),
+                  long_apoe_df %>% 
+                      pull(i))
+    rownames(temp) <- c("Normal", "Dementia")
+    colnames(temp) <- c("Normal", "SNV")
+    
+    print(i)
+    print(temp)
+    print(chisq.test(temp))
+}
+sink()
+
+apoe_df <- read_csv("data/m_apoe_data.csv")
+
+# Check the Variant
+apoe_df %>% 
+    filter(Coordinate == 45409167 & Genotype == "hom") %>% 
+    distinct(Variant)
+
+apoe_genotype <- table(apoe_df %>% 
+                           filter(Coordinate == 45409167) %>% 
+                           distinct(id, Genotype, dementia) %>% 
+                           pull(dementia),
+                       apoe_df %>% 
+                           filter(Coordinate == 45409167) %>% 
+                           distinct(id, Genotype, dementia) %>% 
+                           pull(Genotype))
+print(apoe_genotype)
+print(chisq.test(apoe_genotype))
+
+
 # Manipulate Karyotype Data ----------------------------------------
-master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv")
+master_df_t2_v3 <- read_csv("data/master_data_t2_v3.csv",
+                            col_types = cols(age = col_integer(),
+                                             years_of_education = col_double()))
 
 master_measurement_df <- process_measurement_data(master_df_t2_v3)
 write_csv(master_measurement_df, "data/master_measurement.csv")
@@ -242,14 +247,14 @@ karyotype_measurement_df <- process_measurement_data(karyotype_df)
 # chip_df <- master_df_t2_v3 %>% 
 #     filter(chip == TRUE)
 
-top3b_df <- master_df_t2_v3 %>% 
-    filter(top3b == TRUE)
+top3b_df <- master_df_t2_v3 %>%
+    drop_na(top3b_three_snv)
 
 top3b_measurement_df <- process_measurement_data(top3b_df)
 
 
 # Karyotype & Chip Data Analysis -------------------------------------------------------
-run_analysis(karyotype_df, "karyotype_analysis.txt", condition = "dementia")
+run_analysis(karyotype_df, "output/karyotype/karyotype_analysis.txt", condition = "dementia")
 
 ## Abnormal vs. Normal Chromosome
 patient_df <- karyotype_measurement_df %>%
@@ -257,7 +262,7 @@ patient_df <- karyotype_measurement_df %>%
 normal_df <- karyotype_measurement_df %>%
     filter(dementia == 0)
 
-sink("karyotype_analysis_2.txt")
+sink("output/karyotype/karyotype_analysis_2.txt")
 for (i in c("abnormal_chromosome", "abnormal_sex_chromosome", "turner",
             "xxx")) {
     ## Patient
@@ -342,39 +347,39 @@ sink()
 
 
 # Major TOP3B Data Analysis ----------------------------------------------------
-run_analysis(top3b_df, "top3b_analysis.txt", condition = "dementia",
+run_analysis(top3b_df, "output/karyotype/top3b_analysis.txt", condition = "dementia",
              top3b = TRUE)
 run_analysis(top3b_df %>% 
-                 filter(dementia == 1 & !is.na(presence_major)),
-             "top3b_analysis_patient.txt",
-             condition = "presence_major")
+                 filter(dementia == 1 & !is.na(top3b_three_snv)),
+             "output/karyotype/top3b_analysis_patient.txt",
+             condition = "top3b_three_snv")
 run_analysis(top3b_df %>% 
-                 filter(dementia == 0 & !is.na(presence_major)),
-             "top3b_analysis_normal.txt",
-             condition = "presence_major")
+                 filter(dementia == 0 & !is.na(top3b_three_snv)),
+             "output/karyotype/top3b_analysis_normal.txt",
+             condition = "top3b_three_snv")
 
 ## Patient; Abnormal vs. Normal Chromosome
-sink("top3b_analysis_2.txt")
+sink("output/karyotype/top3b_analysis_2.txt")
 print("Patient; Abnormal vs. Normal Chromosome")
 for (i in c("MMSE", "CDR sum of box")) {
     print_t_test(top3b_measurement_df %>% 
-                     filter(dementia == 1 & !is.na(presence_major)),
-                 column = i, condition = "presence_major",
+                     filter(dementia == 1 & !is.na(top3b_three_snv)),
+                 column = i, condition = "top3b_three_snv",
                  compare_delta = TRUE)
 }
 
 ## Normal; Abnormal vs. Normal Chromosome
 print("Normal; Abnormal vs. Normal Chromosome")
 print_t_test(top3b_measurement_df %>% 
-                 filter(dementia == 0 & !is.na(presence_major)),
-             column = "MMSE", condition = "presence_major",
+                 filter(dementia == 0 & !is.na(top3b_three_snv)),
+             column = "MMSE", condition = "top3b_three_snv",
              compare_delta = TRUE)
 sink()
 
 
 # Check the Interaction between ApoE E4 and Abnormal Sex Chromosome --------
 sink("interaction.txt")
-for (i in c("abnormal_sex_chromosome", "presence_major")) {
+for (i in c("abnormal_sex_chromosome", "top3b_three_snv")) {
     print(paste("The Interaction between ApoE E4 and", i))
     f <- as.formula(paste("dementia ~ apoe_e4 +", i, "+ apoe_e4 *", i))
     lr <- glm(formula = f,

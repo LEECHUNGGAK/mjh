@@ -8,10 +8,10 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 
 
 # Read Data ---------------------------------------------------------------
-top3b_df <- read_csv("data/ngs/top3b_data_t2.csv")
-apoe_df <- read_csv("data/ngs/apoe_data_t2.csv")
+top3b_df <- read_csv("data/ngs/top3b_t2.csv")
+apoe_df <- read_csv("data/ngs/apoe_t2.csv")
 
-working_df <- top3b_df %>% 
+w_df <- top3b_df %>% 
     select(id, dementia, coordinate_22312315, coordinate_22312350,
            coordinate_22312351) %>% 
     left_join(apoe_df %>% 
@@ -26,9 +26,9 @@ working_df <- top3b_df %>%
 
 
 # Drow ROC Curve ----------------------------------------------------------
-pred_t1 <- prediction(working_df$predictions_t1, working_df$dementia)
-pred_t2 <- prediction(working_df$predictions_t2, working_df$dementia)
-pred_t3 <- prediction(working_df$predictions_t3, working_df$dementia)
+pred_t1 <- prediction(w_df$predictions_t1, w_df$dementia)
+pred_t2 <- prediction(w_df$predictions_t2, w_df$dementia)
+pred_t3 <- prediction(w_df$predictions_t3, w_df$dementia)
 
 perf_t1 <- performance(pred_t1, "tpr", "fpr")
 perf_t2 <- performance(pred_t2, "tpr", "fpr")
@@ -76,19 +76,19 @@ dev.off()
 
 
 # Confusion Matrix --------------------------------------------------------
-epi.tests(table(working_df$predictions_t1, working_df$dementia))
-confusionMatrix(data = as.factor(working_df$predictions_t1),
-                reference = as.factor(working_df$dementia),
+epi.tests(table(w_df$predictions_t3, w_df$dementia)[2:1, 2:1])
+confusionMatrix(data = as.factor(w_df$predictions_t3),
+                reference = as.factor(w_df$dementia),
                 positive = "1")
 
-epi.tests(table(working_df$predictions_t2, working_df$dementia))
-confusionMatrix(data = as.factor(working_df$predictions_t2),
-                reference = as.factor(working_df$dementia),
+epi.tests(table(w_df$predictions_t1, w_df$dementia)[2:1, 2:1])
+confusionMatrix(data = as.factor(w_df$predictions_t1),
+                reference = as.factor(w_df$dementia),
                 positive = "1")
 
-epi.tests(table(working_df$predictions_t3, working_df$dementia))
-confusionMatrix(data = as.factor(working_df$predictions_t3),
-                reference = as.factor(working_df$dementia),
+epi.tests(table(w_df$predictions_t2, w_df$dementia)[2:1, 2:1])
+confusionMatrix(data = as.factor(w_df$predictions_t2),
+                reference = as.factor(w_df$dementia),
                 positive = "1")
 
 
@@ -97,7 +97,7 @@ cancerrop_df <- top3b_df %>%
     select(id, dementia, n_variant) %>% 
     mutate(predictions = ifelse(n_variant >= 3, 1, 0))
 
-pred_cancerrop <- prediction(cancerrop_df$predictions, working_df$dementia)
+pred_cancerrop <- prediction(cancerrop_df$predictions, w_df$dementia)
 
 perf_cancerrop <- performance(pred_cancerrop, "tpr", "fpr")
 perf_cancerrop <- performance(pred_cancerrop, "tpr", "fpr")
