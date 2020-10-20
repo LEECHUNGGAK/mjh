@@ -7,7 +7,7 @@ setwd("C:/Users/Administrator/wd/alzheimer")
 
 # Functions ---------------------------------------------------------------
 process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
-    file_v <- str_remove(list.files(data_file_path), ".xls$")
+    file_v <- str_remove(list.files(data_file_path), ".xlsx?$")
     
     temp_df <- data.frame()
     
@@ -16,7 +16,7 @@ process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
                              read_excel(i) %>% 
                                  filter(Gene == gene) %>% 
                                  select(Variant, Coordinate, Genotype, Exonic, Consequence) %>% 
-                                 mutate(id = str_extract(i, "(N|P)-\\d+")))
+                                 mutate(id = str_extract(i, "(N|P)(_N)?-?\\d+")))
     }
     
     result_df <- data.frame(id = str_replace(file_v, ".xls", ""),
@@ -43,21 +43,35 @@ process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
                    g_hom = ifelse(Variant != "normal" & 
                                       str_detect(str_sub(Variant, 3), "G/G"),
                                   1, 0))
-    } else {
-        result_df <- result_df %>% 
-            rename(five_prime_UTR_variant = `5_prime_UTR_variant`)
     }
+    # else {
+        # result_df <- result_df %>% 
+            # rename(five_prime_UTR_variant = `5_prime_UTR_variant`)
+    # }
     
     if (result_file_path != FALSE) {
         write_csv(result_df, result_file_path)
     }
 }
 
-
+spread_ngs_data <- function(dat, output_file_path = FALSE) {
+    output <- dat %>% 
+        select(id, dementia, Coordinate, Variant) %>% 
+        mutate(Coordinate = paste0("coordinate_", Coordinate),
+               Variant = ifelse(Variant == "normal", 0, 1)) %>% 
+        spread(Coordinate, Variant) %>% 
+        replace(is.na(.), 0)
+    # %>% 
+        # mutate(n_variant = rowSums(.[, 3:ncol(.)]))
+    
+    if (output_file_path != FALSE) {
+        write_excel_csv(output, output_file_path)
+    }
+}
 
 # Manipulate TOP3B SNV Coordinate Data ---------------------------------------------------------
 top3b_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
-                             result_file_path = "data/ngs/top3b_data.csv",
+                             result_file_path = "data/ngs/top3b.csv",
                              gene = "TOP3B")
 
 top3b_df <- read_csv("data/ngs/top3b.csv")
@@ -69,6 +83,16 @@ top3b_t2_df <- top3b_df %>%
     spread(Coordinate, Variant) %>% 
     mutate(n_variant = rowSums(.[, 3:ncol(.)]))
 write_excel_csv(top3b_t2_df, "data/ngs/top3b_t2.csv")
+
+# Add Data
+top3b_v2_df <- process_ngs_data(data_file_path = "data/raw/ngs_result_v2",
+                                result_file_path = "data/ngs/top3b_v2.csv",
+                                gene = "TOP3B")
+
+br_top3b_v2_df <- bind_rows(top3b_df, top3b_v2_df)
+write_excel_csv(br_top3b_v2_df, "data/ngs/br_top3b_v2.csv")
+spread_ngs_data(br_top3b_v2_df, output_file_path = "data/ngs/top3b_t2_v2.csv")
+
 
 # Draw a Graph
 plot_df <- top3b_df %>% 
