@@ -10,14 +10,15 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (accuracy_score, confusion_matrix, precision_score,
-                             recall_score, f1_score, roc_curve, precision_recall_curve)
+                             recall_score, f1_score, roc_curve, precision_recall_curve,
+                             auc)
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier)
 from sklearn.neighbors import KNeighborsClassifier
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-path = "C:/Users/Administrator/wd/alzheimer/output/ngs/o_apoe"
+path = "C:/Users/Administrator/wd/alzheimer/output/top3b_201023"
 
 if not os.path.isdir(path):
     os.mkdir(path)
@@ -66,14 +67,19 @@ def draw_plot_fn(validation_labels, prediction_labels, file_name):
     plt.plot(thresholds, precisions[0:threshold_boundary], linestyle = "--",
          label = "Precision")
     plt.plot(thresholds, recalls[0:threshold_boundary], label = "Recall")
+    plt.legend(loc = "lower right")
     plt.savefig(file_name + "_Precision_Recall_Curve.png")
     plt.close()
     
     # ROC curve
     fprs, tprs, thresholds = roc_curve(validation_labels, prediction_labels)
+    roc_auc = auc(fprs, tprs)
     
-    plt.plot(fprs, tprs, label = "ROC")
+    plt.plot(fprs, tprs, label = "ROC; AUC = %0.4f" % roc_auc)
     plt.plot([0, 1], [0, 1], "k--", label = "Random")
+    plt.legend(loc = "lower right")
+    plt.ylabel("True Positive Rate")
+    plt.xlabel("False Positive Rate")
     plt.savefig(file_name + "_ROC_Curve.png")
     plt.close()
 
@@ -152,10 +158,10 @@ def prediction_fn(features, labels):
 
 
 #%% TOP3B Predict
-top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/ngs/comb_top3b_data.csv",
+top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/ngs/combn_top3b_v2.csv",
                                  sep = ",")
 
-top3b_dataframe_1 = top3b_dataframe_0.drop(["id", "n_variant"], axis = 1)
+top3b_dataframe_1 = top3b_dataframe_0.drop(["id"], axis = 1)
 
 features_dataframe = top3b_dataframe_1.drop("dementia", axis = 1)
 labels_dataframe = top3b_dataframe_1["dementia"]
