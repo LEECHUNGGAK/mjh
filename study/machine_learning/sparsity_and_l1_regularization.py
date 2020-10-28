@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Oct 27 10:37:06 2020
+Created on Wed Oct 28 10:12:02 2020
 
 @author: Administrator
 """
-
 
 #%% Set Work Environment
 from __future__ import print_function
@@ -79,18 +78,6 @@ def preprocess_targets(california_housing_df):
     
     return output_targets
 
-def construct_feature_columns(input_features):
-    """ Construct the TensorFlow Feature Columns.
-    
-    Args:
-        input_features: The names of the numerical input features to use.
-    Returns:
-        A set of feature columns
-    """
-    
-    return set([tf.feature_column.numeric_column(my_feature)
-                for my_feature in input_features])
-
 def my_input_fn(features, targets, batch_size = 1, shuffle = True,
                 num_epochs = None):
     """ Train a linear regression model.
@@ -122,8 +109,84 @@ def my_input_fn(features, targets, batch_size = 1, shuffle = True,
     
     return features, labels
 
+def get_quantile_based_buckets(feature_values, num_buckets):
+    quantiles = feature_values.quantile(
+        [(i + 1) / (num_buckets + 1) for i in range(num_buckets)]
+    )
+    
+    return [quantiles[q] for q in quantiles.keys()]
+
+def construct_feature_columns():
+    """ Construct the TensorFlow Feature Columns.
+    
+    Returns:
+        A set of feature columns
+    """
+    
+    bucketized_households = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("households"),
+        boundaries = get_quantile_based_buckets(training_examples["households"], 10)
+    )
+    bucketized_longitude = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("longitude"),
+        boundaries = get_quantile_based_buckets(training_examples["longitude"], 50)
+    )
+    bucketized_latitude = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("latitude"),
+        boundaries = get_quantile_based_buckets(training_examples["longitude"], 50)
+    )
+    bucketized_housing_median_age = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("housing_median_age"),
+        boundaries = get_quantile_based_buckets(training_examples["housing_median_age"], 10)
+    )
+    bucketized_total_rooms = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("total_rooms"),
+        boundaries = get_quantile_based_buckets(training_examples["total_rooms"], 10)
+    )
+    bucketized_total_bedrooms = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("total_bedrooms"),
+        boundaries = get_quantile_based_buckets(training_examples["total_bedrooms"], 10)
+    )
+    bucketized_population = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("population"),
+        boundaries = get_quantile_based_buckets(training_examples["population"], 10)
+    )
+    bucketized_median_income = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("median_income"),
+        boundaries = get_quantile_based_buckets(training_examples["median_income"], 10)
+    )
+    bucketized_rooms_per_person = tf.feature_column.bucketized_column(
+        tf.feature_column.numeric_column("rooms_per_person"),
+        boundaries = get_quantile_based_buckets(training_examples["rooms_per_person"], 10)
+    )
+    
+    long_x_lat = tf.feature_column.crossed_column(
+        set([bucketized_longitude, bucketized_latitude]), hash_bucket_size = 1000
+    )
+    
+    feature_columns = set([
+        long_x_lat, bucketized_longitude, bucketized_latitude, 
+        bucketized_housing_median_age, bucketized_total_rooms,
+        bucketized_total_bedrooms, bucketized_population, bucketized_households,
+        bucketized_median_income, bucketized_rooms_per_person
+        ])
+    
+    return feature_columns
+
+def model_size(estimator):
+    variables = estimator.get_variable_names()
+    size = 0
+    for variable in variables:
+        if not any(x in variable for x in [
+                'global_step', 'centered_biase_weight', 'bias_weight', 'Ftrl'
+            ]):
+            size += np.count_nonzero(estimator.get_variable_value(variable))
+            
+        return size
+        
 def train_linear_classifier_model(
-        learning_rate, steps, batch_size, training_examples, training_targets,
+        learning_rate, regularization_strength, steps, batch_size,
+        feature_columns, training_examples, training_targets,
         validation_examples, validation_targets
         ):
     """ Trains a linear classification model.
@@ -133,9 +196,12 @@ def train_linear_classifier_model(
     
     Args:
         learning_raet: A 'float', the learning rate.
+        regularization_strength: A 'float' that indicates the strength of the
+            L1 regularization. A value of '0' means no regularization.
         steps: A non-zero 'int', the total number of training steps. A training
             step consists of a forward and backward pass using a single batch.
         batch_size: A non-zero 'int', the batch_size.
+        feature_columns: A 'set' specifying the input feature columns to use.
         training_examples: A 'DataFrame' containing one or more columns from
             'california_housing_df' to use as input features for training.
         training_targets: A 'DataFrame' containing exactly one column from
@@ -150,14 +216,14 @@ def train_linear_classifier_model(
         A 'LinearClassifier' object trained on the training data.
     """
     
-    periods = 10
+    periods = 7
     steps_per_period = steps / periods
     
     # Create a linear regressor object.
     my_optimizer = partial(tf.optimizers.Ftrl, learning_rate = learning_rate,
                            clipnorm = 5.0)
     linear_classifier = tf.estimator.LinearClassifier(
-        feature_columns = construct_feature_columns(training_examples),
+        feature_columns = feature_columns,
         optimizer = my_optimizer
     )
     
@@ -237,34 +303,19 @@ display.display(validation_examples.describe())
 print("Training targets summary:")
 display.display(training_targets.describe())
 print("Validation targets summary:")
-display.display(validation_targets.describe())  
+display.display(validation_targets.describe())
 
 
 #%% Run
 linear_classifier = train_linear_classifier_model(
-    learning_rate = 0.000003, # 0.000005 -> 0.000003 to improve AUC
-    steps = 20000, # 500 -> 20000
-    batch_size = 500, # 20 -> 500
+    learning_rate = 0.1,
+    regularization_strength = 0.1,
+    steps = 300,
+    batch_size = 100,
+    feature_columns = construct_feature_columns(),
     training_examples = training_examples,
     training_targets = training_targets,
     validation_examples = validation_examples,
     validation_targets = validation_targets
 )
-
-
-#%% Evaluate
-evaluation_metrics = linear_classifier.evaluate(input_fn = predict_validation_input_fn)
-
-print("AUC on the validation set: %0.2f" % evaluation_metrics['auc'])
-print("Accuracy on the validation set: %0.2f" % evaluation_metrics['accuracy'])
-
-validation_probabilities = linear_classifier.predict(input_fn = predict_validation_input_fn)
-# Get just the probabilities for the positive class.
-validation_probabilities = np.array([item['probabilities'][1] for item in validation_probabilities])
-
-false_positive_rate, true_positive_rate, thresholds = metrics.roc_curve(
-    validation_targets, validation_probabilities
-)
-plt.plot(false_positive_rate, true_positive_rate, label = "our model")
-plt.plot([0, 1], [0, 1], label = "random classifier")
-_ = plt.legend(loc = 2)
+print("Model size:", model_size(linear_classifier))
