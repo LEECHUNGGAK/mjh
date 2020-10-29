@@ -6,20 +6,25 @@ library(epiR)
 
 setwd("C:/Users/Administrator/wd/alzheimer")
 
+plot_path <- "output/roc_curve"
+
 
 # Read Data ---------------------------------------------------------------
-top3b_df <- read_csv("data/ngs/top3b_t2.csv")
+top3b_df <- read_csv("data/ngs/top3b_t2_v2.csv")
 apoe_df <- read_csv("data/ngs/apoe_t2.csv")
 
-w_df <- top3b_df %>% 
+tmp_df <- top3b_df %>% 
     select(id, dementia, coordinate_22312315, coordinate_22312350,
            coordinate_22312351) %>% 
     left_join(apoe_df %>% 
                   select(id, e4_carrier, g_hom),
               by= "id") %>% 
     mutate(top3b_three_snv = ifelse(coordinate_22312315 + coordinate_22312350 + 
-                                        coordinate_22312351 == 3, 1, 0),
-           predictions_t1 = ifelse(top3b_three_snv == 1 | e4_carrier == 1, 1, 0),
+                                        coordinate_22312351 == 3, 1, 0))
+write_excel_csv(tmp_df, "data/data_classify_with_ngs.csv")
+
+w_df <- tmp_df %>% 
+    mutate(predictions_t1 = ifelse(top3b_three_snv == 1 | e4_carrier == 1, 1, 0),
            predictions_t2 = ifelse(top3b_three_snv == 1 | e4_carrier == 1 | 
                                        g_hom == 1, 1, 0),
            predictions_t3 = ifelse(top3b_three_snv == 1, 1, 0))
@@ -33,8 +38,6 @@ pred_t3 <- prediction(w_df$predictions_t3, w_df$dementia)
 perf_t1 <- performance(pred_t1, "tpr", "fpr")
 perf_t2 <- performance(pred_t2, "tpr", "fpr")
 perf_t3 <- performance(pred_t3, "tpr", "fpr")
-
-plot_path <- "output/roc_curve"
 
 png(file.path(plot_path, "t1.png"))
 plot(perf_t1)
@@ -50,8 +53,8 @@ legend("bottomright",
        paste("AUC:", round(performance(pred_t2, "auc")@y.values[[1]], 4)))
 dev.off()
 
-png(file.path(plot_path, "t3.png"))
-plot(perf_t2)
+png(file.path(plot_path, "t3_v2.png"))
+plot(perf_t3)
 title("TOP3B 3 SNV")
 legend("bottomright",
        paste("AUC:", round(performance(pred_t3, "auc")@y.values[[1]], 4)))
@@ -63,14 +66,14 @@ plot(perf_t2, add = TRUE, lty = "dotted")
 plot(perf_t3, add = TRUE)
 legend("right",
        c(paste0("TOP3B 3 SNV\n(AUC: ",
-               round(performance(pred_t3, "auc")@y.values[[1]], 4),
-               ")"), 
+                round(performance(pred_t3, "auc")@y.values[[1]], 4),
+                ")"), 
          paste0("TOP3B 3 SNV\n+ APOE 4 Carrier\n(AUC: ",
-               round(performance(pred_t1, "auc")@y.values[[1]], 4),
-               ")"),
+                round(performance(pred_t1, "auc")@y.values[[1]], 4),
+                ")"),
          paste0("TOP3B 3 SNV\n+ APOE 4 Carrier\n+ GG homozygote\n(AUC: ",
-               round(performance(pred_t2, "auc")@y.values[[1]], 4),
-               ")")),
+                round(performance(pred_t2, "auc")@y.values[[1]], 4),
+                ")")),
        lty = c("solid", "longdash", "dotted"))
 dev.off()
 
@@ -80,6 +83,8 @@ epi.tests(table(w_df$predictions_t3, w_df$dementia)[2:1, 2:1])
 confusionMatrix(data = as.factor(w_df$predictions_t3),
                 reference = as.factor(w_df$dementia),
                 positive = "1")
+auc_t3 <- performance(pred_t3, "auc")
+auc_t3@y.values[[1]]
 
 epi.tests(table(w_df$predictions_t1, w_df$dementia)[2:1, 2:1])
 confusionMatrix(data = as.factor(w_df$predictions_t1),

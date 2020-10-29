@@ -73,7 +73,7 @@ obj@Pars <- keep_pars %>%
 anti_join(ori_pars, obj@Pars)
 
 obj@Pars <- obj@Pars %>% 
-    mutate(std = ifelse(std < 0.2, 0, std))
+    mutate(std = ifelse(abs(std) < 0.2, 0, std))
 
 semPaths(obj, "std", style = "lisrel", layout = "circle2", edge.label.cex = 1,
          edge.color = "black")

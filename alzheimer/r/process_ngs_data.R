@@ -23,6 +23,7 @@ process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
                             Coordinate = rep(unique(temp_df$Coordinate),
                                              each = length(file_v))) %>% 
         left_join(temp_df, by = c("id", "Coordinate")) %>% 
+        mutate(id = str_replace_all(id, "_", "-")) %>% 
         arrange(id) %>% 
         replace_na(list(Variant = "normal", Genotype = "homozygous wild type", Exonic = "no")) %>% 
         mutate(Consequence_value = 1,
@@ -85,13 +86,13 @@ top3b_t2_df <- top3b_df %>%
 write_excel_csv(top3b_t2_df, "data/ngs/top3b_t2.csv")
 
 # Add Data
-top3b_v2_df <- process_ngs_data(data_file_path = "data/raw/ngs_result_v2",
+combine_df <- process_ngs_data(data_file_path = "data/raw/ngs_result_v2",
                                 result_file_path = "data/ngs/top3b_v2.csv",
                                 gene = "TOP3B")
 
-br_top3b_v2_df <- bind_rows(top3b_df, top3b_v2_df)
-write_excel_csv(br_top3b_v2_df, "data/ngs/br_top3b_v2.csv")
-spread_ngs_data(br_top3b_v2_df, output_file_path = "data/ngs/top3b_t2_v2.csv")
+top3b_v2_df <- bind_rows(top3b_df, combine_df)
+write_excel_csv(top3b_v2_df, "data/ngs/top3b_v2.csv")
+spread_ngs_data(top3b_v2_df, output_file_path = "data/ngs/top3b_v2_t2.csv")
 
 
 # Draw a Graph
