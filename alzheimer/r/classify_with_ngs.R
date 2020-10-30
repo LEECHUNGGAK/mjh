@@ -10,8 +10,8 @@ plot_path <- "output/roc_curve"
 
 
 # Read Data ---------------------------------------------------------------
-top3b_df <- read_csv("data/ngs/top3b_t2_v2.csv")
-apoe_df <- read_csv("data/ngs/apoe_t2.csv")
+top3b_df <- read_csv("data/ml/ml_top3b_t2.csv")
+apoe_df <- read_csv("data/ml/ml_apoe_t2.csv")
 
 tmp_df <- top3b_df %>% 
     select(id, dementia, coordinate_22312315, coordinate_22312350,
@@ -21,7 +21,17 @@ tmp_df <- top3b_df %>%
               by= "id") %>% 
     mutate(top3b_three_snv = ifelse(coordinate_22312315 + coordinate_22312350 + 
                                         coordinate_22312351 == 3, 1, 0))
-write_excel_csv(tmp_df, "data/data_classify_with_ngs.csv")
+# write_excel_csv(tmp_df, "data/data_classify_with_ngs.csv")
+
+ml_df <- tmp_df %>% 
+    drop_na(g_hom, e4_carrier) %>% 
+    mutate(g_hom_or_e4_carrier = ifelse(g_hom == 1 | e4_carrier == 1, 1, 0),
+           top3b_three_snv_or_g_hom_or_e4_carrier = ifelse(
+               top3b_three_snv == 1 | g_hom == 1 | e4_carrier == 1, 1, 0)) %>% 
+    select(-c(id, starts_with("coordinate_"), g_hom))
+# write_excel_csv(ml_df, "data/data_classify_with_ngs_ml.csv")
+
+
 
 w_df <- tmp_df %>% 
     mutate(predictions_t1 = ifelse(top3b_three_snv == 1 | e4_carrier == 1, 1, 0),
@@ -60,17 +70,17 @@ legend("bottomright",
        paste("AUC:", round(performance(pred_t3, "auc")@y.values[[1]], 4)))
 dev.off()
 
-png(file.path(plot_path, "t1_t2_t3.png"))
+png(file.path(plot_path, "t1_t2_t3.png"), width = 580, height = 580)
 plot(perf_t1, lty = "longdash")
 plot(perf_t2, add = TRUE, lty = "dotted")
 plot(perf_t3, add = TRUE)
-legend("right",
+legend(x = c(0.6, 1), y = c(0, 0.5),
        c(paste0("TOP3B 3 SNV\n(AUC: ",
                 round(performance(pred_t3, "auc")@y.values[[1]], 4),
                 ")"), 
          paste0("TOP3B 3 SNV\n+ APOE 4 Carrier\n(AUC: ",
                 round(performance(pred_t1, "auc")@y.values[[1]], 4),
-                ")"),
+                ")\n"),
          paste0("TOP3B 3 SNV\n+ APOE 4 Carrier\n+ GG homozygote\n(AUC: ",
                 round(performance(pred_t2, "auc")@y.values[[1]], 4),
                 ")")),
@@ -84,7 +94,6 @@ confusionMatrix(data = as.factor(w_df$predictions_t3),
                 reference = as.factor(w_df$dementia),
                 positive = "1")
 auc_t3 <- performance(pred_t3, "auc")
-auc_t3@y.values[[1]]
 
 epi.tests(table(w_df$predictions_t1, w_df$dementia)[2:1, 2:1])
 confusionMatrix(data = as.factor(w_df$predictions_t1),

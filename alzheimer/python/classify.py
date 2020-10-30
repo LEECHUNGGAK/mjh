@@ -17,13 +17,7 @@ from sklearn.neighbors import KNeighborsClassifier
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-
-path = "C:/Users/Administrator/wd/alzheimer/output/top3b_201023"
-
-if not os.path.isdir(path):
-    os.mkdir(path)
-    
-os.chdir(path)
+import datetime
 
 
 #%% Functions
@@ -83,7 +77,12 @@ def draw_plot_fn(validation_labels, prediction_labels, file_name):
     plt.savefig(file_name + "_ROC_Curve.png")
     plt.close()
 
-def prediction_fn(features, labels):
+def prediction_fn(features, labels, path):
+    path = path + datetime.datetime.now().strftime("%Y-%m-%d")
+
+    if not os.path.isdir(path):
+        os.mkdir(path)
+    
     features_name = features.columns
     
     # Train test split
@@ -99,14 +98,14 @@ def prediction_fn(features, labels):
     
     lr_pred = lr_clf.predict(validation_features)
     
-    score_fn(validation_labels, lr_pred, "Logistic_Regression")
-    draw_plot_fn(validation_labels, lr_pred, "Logistic_Regression")
+    score_fn(validation_labels, lr_pred, path + "/Logistic_Regression")
+    draw_plot_fn(validation_labels, lr_pred, path + "/Logistic_Regression")
     
     # Coefficient
     coefficients = lr_clf.coef_
     coefficient_dataframe = pd.DataFrame({"coordinate":features_name,
                                        "coefficient":coefficients.tolist()[0]})
-    coefficient_dataframe.to_csv("Logistic_Regression_Coefficient.csv",
+    coefficient_dataframe.to_csv(path + "/Logistic_Regression_Coefficient.csv",
                              index = False)
     
     # Random Forest
@@ -116,8 +115,8 @@ def prediction_fn(features, labels):
 
     rf_pred = rf_clf.predict(validation_features)
     
-    score_fn(validation_labels, rf_pred, "Random_Forest")
-    draw_plot_fn(validation_labels, rf_pred, "Random_Forest")
+    score_fn(validation_labels, rf_pred, path + "/Random_Forest")
+    draw_plot_fn(validation_labels, rf_pred, path + "/Random_Forest")
     
     # Feature importances
     rf_feature_importances = rf_clf.feature_importances_
@@ -126,14 +125,14 @@ def prediction_fn(features, labels):
 
     feature_importance_dataframe = pd.DataFrame({"coordinate":features_name,
                                              "feature_importance":rf_feature_importances})
-    feature_importance_dataframe.to_csv("Random_Forest_Feature_Importance.csv",
+    feature_importance_dataframe.to_csv(path + "/Random_Forest_Feature_Importance.csv",
                              index = False)
 
     plt.title("Feature Importances")
     plt.bar(range(len(indices)), rf_feature_importances[indices])
     plt.xticks(range(len(indices)), [features_name[i] for i in indices], rotation = -90)
     plt.tight_layout()
-    plt.savefig("Random_Forest_Feature_Importance_Plot.png", dpi = 300,
+    plt.savefig(path + "/Random_Forest_Feature_Importance_Plot.png", dpi = 300,
                 )
     
     # K NeighborsClassifier
@@ -143,8 +142,8 @@ def prediction_fn(features, labels):
     
     kn_pred = kn_clf.predict(validation_features)
     
-    score_fn(validation_labels, kn_pred, "K_Neighbors")
-    draw_plot_fn(validation_labels, kn_pred, "K_Neighbors")
+    score_fn(validation_labels, kn_pred, path + "/K_Neighbors")
+    draw_plot_fn(validation_labels, kn_pred, path + "/K_Neighbors")
     
     # Gradient Boosting
     gb_clf = GradientBoostingClassifier()
@@ -153,21 +152,36 @@ def prediction_fn(features, labels):
     
     gb_pred = gb_clf.predict(validation_features)
     
-    score_fn(validation_labels, gb_pred, "Gradient_Boosting")
-    draw_plot_fn(validation_labels, gb_pred, "Gradient_Boosting")
+    score_fn(validation_labels, gb_pred, path + "/Gradient_Boosting")
+    draw_plot_fn(validation_labels, gb_pred, path + "/Gradient_Boosting")
 
 
 #%% TOP3B Predict
-top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/ngs/combn_top3b_v2.csv",
+# v1
+top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/ml/ml_top3b_combination.csv",
                                  sep = ",")
 
-top3b_dataframe_1 = top3b_dataframe_0.drop(["id"], axis = 1)
+top3b_dataframe_1 = top3b_dataframe_0.drop(["id", "n_variant"], axis = 1)
 
 features_dataframe = top3b_dataframe_1.drop("dementia", axis = 1)
 labels_dataframe = top3b_dataframe_1["dementia"]
 
-prediction_fn(features_dataframe, labels_dataframe)
+prediction_fn(features_dataframe,
+              labels_dataframe,
+              "C:/Users/Administrator/wd/alzheimer/output/top3b_v1_")
 
+# v2
+top3b_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/ml/ml_top3b_combination_v2.csv",
+                                 sep = ",")
+
+top3b_dataframe_1 = top3b_dataframe_0.drop(["id", "n_variant"], axis = 1)
+
+features_dataframe = top3b_dataframe_1.drop("dementia", axis = 1)
+labels_dataframe = top3b_dataframe_1["dementia"]
+
+prediction_fn(features_dataframe,
+              labels_dataframe,
+              "C:/Users/Administrator/wd/alzheimer/output/top3b_v2_")
 
 #%% APOE Predict
 apoe_dataframe_0 = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/apoe_data_t2.csv", 
@@ -177,5 +191,14 @@ apoe_dataframe_1 = apoe_dataframe_0.drop("id", axis = 1)
 
 features_dataframe = apoe_dataframe_1.drop("dementia", axis = 1)
 labels_dataframe = apoe_dataframe_1["dementia"]
+
+prediction_fn(features_dataframe, labels_dataframe)
+
+#%%
+dat_df = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/data_classify_with_ngs_v2.csv",
+                                 sep = ",")
+
+features_dataframe = dat_df.drop("dementia", axis = 1)
+labels_dataframe = dat_df["dementia"]
 
 prediction_fn(features_dataframe, labels_dataframe)
