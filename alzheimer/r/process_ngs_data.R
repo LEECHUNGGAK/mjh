@@ -1,6 +1,7 @@
 # Set Environment ---------------------------------------------------------
 library(tidyverse)
 library(readxl)
+library(progress)
 
 setwd("C:/Users/Administrator/wd/alzheimer")
 
@@ -46,8 +47,8 @@ process_ngs_data <- function(data_file_path, result_file_path = FALSE, gene) {
                                   1, 0))
     }
     # else {
-        # result_df <- result_df %>% 
-            # rename(five_prime_UTR_variant = `5_prime_UTR_variant`)
+    # result_df <- result_df %>% 
+    # rename(five_prime_UTR_variant = `5_prime_UTR_variant`)
     # }
     
     if (result_file_path != FALSE) {
@@ -61,21 +62,100 @@ spread_ngs_data <- function(dat, output_file_path = FALSE) {
         mutate(Coordinate = paste0("coordinate_", Coordinate),
                Variant = ifelse(Variant == "normal", 0, 1)) %>% 
         spread(Coordinate, Variant) %>% 
-        replace(is.na(.), 0)
-    # %>% 
-        # mutate(n_variant = rowSums(.[, 3:ncol(.)]))
+        replace(is.na(.), 0) %>% 
+        mutate(n_variant = rowSums(.[, 3:ncol(.)]))
     
     if (output_file_path != FALSE) {
         write_excel_csv(output, output_file_path)
     }
 }
 
-# Manipulate TOP3B SNV Coordinate Data ---------------------------------------------------------
+make_combination <- function(dat, remove_bad_feature = 0, file_path = FALSE) {
+    name_v <- str_remove(
+        unique(colnames(dat %>%
+                            select(starts_with("coordinate_")))),
+        "^coordinate_")
+    
+    for (i in 3:1) {
+        com_mat <- combn(name_v, i)
+        
+        pb <- progress_bar$new(total = ncol(com_mat),
+                               clear = FALSE)
+        pb <- progress_bar$message(paste0("Combination ", i, " is being processed."))
+        
+        for (j in 1:ncol(com_mat)) {
+            col_name <- paste(c("coordinate", com_mat[, j]), collapse = "_")
+            
+            for (k in 1:i) {
+                assign(paste0("col", k), paste0("coordinate_", com_mat[k, j]))
+            }
+            
+            if (i == 3) {
+                dat <- dat %>% 
+                    mutate(!!col_name := ifelse(!!sym(col1) + !!sym(col2) + !!sym(col3) == 3, 1, 0))
+            } else if (i == 2) {
+                dat <- dat %>% 
+                    mutate(!!col_name := ifelse((!!sym(col1) + !!sym(col2) == 2) &
+                                                    n_variant == 2, 1, 0))
+            } else {
+                dat <- dat %>% 
+                    mutate(!!col_name := ifelse((!!sym(col1) == 1) &
+                                                    n_variant == 1, 1, 0))
+            }
+            
+            pb$tick()
+        }
+    }
+    
+    if (!remove_bad_feature == FALSE) {
+        col_sum <- colSums(dat %>% 
+                               select(starts_with("coordinate_")))
+        
+        bad_col <- names(col_sum)[col_sum <= remove_bad_feature]
+        
+        dat <- dat %>% 
+            select(-bad_col)
+    }
+    
+    if (!file_path == FALSE) {
+        write_csv(dat, file_path)
+    }
+}
+
+drop_person <- function(dat, drop_file_path) {
+    drop_v <- read_csv(drop_file_path, col_names = FALSE) %>% 
+        mutate(X1 = str_replace_all(X1, "_", "-")) %>% 
+        pull(X1)
+    
+    output <- dat %>% 
+        filter(!id %in% drop_v)
+    
+    return(output)
+}
+
+# Process TOP3B Data Set---------------------------------------------------------
 top3b_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
                              result_file_path = "data/ngs/top3b.csv",
                              gene = "TOP3B")
+# top3b_df <- read_csv("data/ngs/top3b.csv")
 
-top3b_df <- read_csv("data/ngs/top3b.csv")
+ml_top3b_df <- drop_person(top3b_df, "data/material/drop.csv")
+
+ml_top3b_t2_df <- spread_ngs_data(ml_top3b_df,
+                                  "data/ml/ml_top3b_t2.csv")
+
+ml_top3b_com_df <- make_combination(ml_top3b_t2_df, remove_bad_feature = 5,
+                                    file_path = "data/ml/ml_top3b_combination.csv")
+
+ml_top3b_t2_v2_df <- ml_top3b_t2_df %>% 
+    mutate(haplotype = ifelse(
+        coordinate_22312315 + coordinate_22312350 + coordinate_22312351 >= 1,
+        1,
+        0)) %>% 
+    select(-c(coordinate_22312315, coordinate_22312350, coordinate_22312351))
+
+ml_top3b_com_v2_df <- make_combination(ml_top3b_t2_v2_df, remove_bad_feature = 5,
+                                    file_path = "data/ml/ml_top3b_combination_v2.csv")
 
 top3b_t2_df <- top3b_df %>% 
     select(id, dementia, Coordinate, Variant) %>% 
@@ -86,13 +166,13 @@ top3b_t2_df <- top3b_df %>%
 write_excel_csv(top3b_t2_df, "data/ngs/top3b_t2.csv")
 
 # Add Data
-combine_df <- process_ngs_data(data_file_path = "data/raw/ngs_result_v2",
-                                result_file_path = "data/ngs/top3b_v2.csv",
-                                gene = "TOP3B")
+top3b_v2_df <- process_ngs_data(data_file_path = "data/raw/ngs_result_v2",
+                               result_file_path = "data/ngs/top3b_v2.csv",
+                               gene = "TOP3B")
 
-top3b_v2_df <- bind_rows(top3b_df, combine_df)
 write_excel_csv(top3b_v2_df, "data/ngs/top3b_v2.csv")
-spread_ngs_data(top3b_v2_df, output_file_path = "data/ngs/top3b_v2_t2.csv")
+top3b_v2_t2_df <- spread_ngs_data(top3b_v2_df,
+                                  output_file_path = "data/ngs/top3b_v2_t2.csv")
 
 
 # Draw a Graph
@@ -167,23 +247,10 @@ col_sum_df <- as.data.frame(col_sum) %>%
     arrange(desc(col_sum)) %>% 
     head(10)
 
-# Manipulate ApoE Data ----------------------------------------------------
+# Process ApoE Data Set ----------------------------------------------------
 apoe_df <- process_ngs_data(data_file_path = "data/raw/NGS_result",
                             result_file_path = "data/ngs/apoe_data.csv",
                             gene = "APOE")
-
-# apoe_check_df <- data.frame(id = file_v) %>% 
-#     left_join(apoe_df,
-#               by = "id") %>%
-#     distinct(id, Gene) %>%
-#     group_by(Gene) %>% 
-#     sample_n(20) %>% 
-#     ungroup() %>% 
-#     select(id) %>% 
-#     left_join(apoe_df,
-#               by = "id")
-# write_excel_csv(apoe_check_df, "apoe_check.csv")
-
 apoe_df <- read_csv("data/ngs/apoe_data.csv")
 
 apoe_df_t2 <- apoe_df %>% 
@@ -192,6 +259,16 @@ apoe_df_t2 <- apoe_df %>%
            e4_hom = ifelse(apoe == "E4/E4", 1, 0)) %>% 
     select(id, dementia, starts_with("g_"), starts_with("e4_"))
 write_excel_csv(apoe_df_t2, "data/apoe_data_t2.csv")
+
+ml_apoe_df <- drop_person(apoe_df, 
+                          "data/material/drop.csv")
+ml_apoe_df_t2 <- ml_apoe_df %>% 
+    filter(Coordinate == 45409167) %>% 
+    mutate(e4_carrier = ifelse(str_detect(apoe, "E4"), 1, 0),
+           e4_hom = ifelse(apoe == "E4/E4", 1, 0)) %>% 
+    select(id, dementia, starts_with("g_"), starts_with("e4_"))
+write_excel_csv(ml_apoe_df_t2, "data/ml/ml_apoe_t2.csv")
+
 
 
 # Create ApoE Plot --------------------------------------------------------
