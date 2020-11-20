@@ -15,9 +15,9 @@ process_master_data <- function(master_data,
     # 2020-08-07: Exclude phlebemphraxis
     
     years_of_education_df <- data.frame(
-        최종학력 = c("무학", "초중퇴", "초졸", "중중퇴", "중졸", "고중퇴",
-                 "고졸", "전문대졸", "전대졸", "초급대졸", "대중퇴", "대졸",
-                 "대학원졸", "석사"),
+        최종학력 = c("^무학", "^초중퇴", "^초졸", "^중중퇴", "^중졸", "^고중퇴",
+                 "^고졸", "^전문대졸", "^전대졸", "^초급대졸", "^대중퇴", "^대졸",
+                 "^대학원졸", "^석사"),
         years_of_education = c(0, 3, 6, 7.5, 9, 10.5,
                                12, 14, 14, 14, 14, 16,
                                18, 18)
@@ -36,9 +36,23 @@ process_master_data <- function(master_data,
     # 2020-08-17: Add stroke column
     
     if (years_of_education) {
-        result <- result %>% 
-            left_join(years_of_education_df,
-                      by = "최종학력")
+        for (i in 1:nrow(result)) {
+            education <- result[[i, "최종학력"]]
+            
+            if (is.na(education)) {
+                result[i, "years_of_education"] <- NA
+            } else if (str_detect(education, "^\\d+$")) {
+                result[i, "years_of_education"] <- as.double(education)
+            } else if (!str_detect(education, "\\(") & !str_detect(education, "\\)")) {
+                result[i, "years_of_education"] <- years_of_education_df$years_of_education[
+                    str_detect(education, years_of_education_df$최종학력)
+                ]
+            } else if (str_detect(education, "\\(") & str_detect(education, "\\)")) {
+                temp_char <- str_extract(education, "\\(\\d+")
+                temp_char <- str_remove(temp_char, "\\(")
+                result[i, "years_of_education"] <- as.double(temp_char)
+            }
+        }
     }
     
     return(result)
@@ -49,10 +63,10 @@ preprocess_karyotype_data <- function(data) {
         drop_na(식별코드) %>% 
         select(-c(병원명, 환자명, 검체, 우선순위, Karyotype,
                      결과상세)) %>% 
-        separate(`성별/나이`, c("gender", "age"), "/") %>% 
-        rename(management_number = 1,
-               registration_date = 2,
-               id = 3,
+        separate(`성별/나이`, c("gender", "나이"), "/") %>% 
+        rename(karyotype_2_no = 1,
+               karyotype_registration_date = 2,
+               cancerrop_no = 3,
                abnormal_chromosome = 6,
                abnormal_sex_chromosome = 7,
                klinefelter = 8,
@@ -60,10 +74,10 @@ preprocess_karyotype_data <- function(data) {
                xxx = 10,
                abnormal_autosome = 11,
                include_marker_chromosome = 12) %>% 
-        mutate(registration_date = ymd(registration_date),
-               id = str_replace(id, "'", ""),
+        mutate(karyotype_registration_date = ymd(karyotype_registration_date),
+               cancerrop_no = str_replace(cancerrop_no, "'", ""),
                gender = recode(gender, 남 = "Male", 여 = "Female"),
-               age = as.integer(age),
+               나이 = as.integer(나이),
                karyotype = TRUE) %>% 
         replace_na(list(abnormal_chromosome = 0, abnormal_sex_chromosome = 0,
                         klinefelter = 0, turner = 0, xxx = 0,
@@ -98,18 +112,18 @@ coalesce_join <- function(x, y, by, join = dplyr::full_join, suffix = c(".x", ".
                 coalesced[j, i] <- c_x
             } else {
                 coalesced[j, i] <- paste(unique(c(str_split(c_x, "\n")[[1]],
-                                            str_split(c_y, "\n")[[1]])),
-                                        collapse = "\n") 
+                                                  str_split(c_y, "\n")[[1]])),
+                                         collapse = "\n") 
             }
         }
     }
-
+    
     # coalesced <- map_dfc(to_coalesce, ~str_replace_all(paste(joined[[paste0(.x, suffix[1])]],
     #                                                          joined[[paste0(.x, suffix[2])]],
     #                                                          sep = "\n"), "(\nNA)|(NA\n)", ""))
     # 
     # names(coalesced) <- to_coalesce
-
+    
     bind_cols(joined, coalesced)[cols]
     
     return(bind_cols(joined, coalesced)[cols])
@@ -117,11 +131,17 @@ coalesce_join <- function(x, y, by, join = dplyr::full_join, suffix = c(".x", ".
 
 
 # Manipulate Master Data -------------------------------------------------------------
+key_df <- read_csv("data/key/output/key_20201118.csv",
+                   col_types = cols(.default = "c"))
+
 master_t_df <- read_csv("data/material/master_p.csv",
                         col_types = cols(.default = "c")) %>% 
     mutate(No = str_replace(No, "^P_", "P-"))
 master_c_df <- read_csv("data/material/master_c.csv",
-                        col_types = cols(.default = "c"))
+                        col_types = cols(.default = "c")) %>% 
+    mutate(No = str_replace(No, "^N_", "N-"),
+           최근신경인지검사일 = `MMSE 시행날짜`)
+    
 
 master_df <- master_t_df %>% 
     mutate(dementia = 1) %>% 
@@ -133,16 +153,18 @@ master_df <- master_t_df %>%
            동의서취득 = str_to_lower(동의서취득),
            채혈여부 = str_to_lower(채혈여부),
            외래방문일자 = ifelse(외래방문일자 ==  "-", NA, 외래방문일자)) %>% 
-    rename(master_no = No, registration_date = 등재일, gender = 성별, 
+    rename(master_no = No, master_registration_date = 등재일, gender = 성별, 
            birth_date = 생년월일, patient_id = 병록번호, name = 이름,
-           measurement_date = 최근신경인지검사일, cdr_sob = `CDR_Sum of box`) %>% 
+           measurement_date = 최근신경인지검사일, cdr_sob = `CDR_Sum of box`,
+           drop = 탈락여부) %>% 
     left_join(key_df %>% 
                   select(patient_id, key_id),
               by = "patient_id") %>% 
-    drop_na(master_no)
+    drop_na(master_no) %>% 
+    replace_na(list(drop = 0))
 
 master_df <- process_master_data(master_df,
-                                    years_of_education = TRUE)
+                                 years_of_education = TRUE)
 
 # Bind rows cancerrop Data
 cancerrop_df <- read_csv("data/material/cancerrop_patient.csv",
@@ -165,88 +187,121 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv",
            cdr_sob = `CDR_Sum of box`) %>% 
     mutate(birth_date = as.character(ymd(paste0("19", birth_date))),
            gender = recode(gender, M = "Male", F = "Female"),
-           ApoE = gsub("^(E\\d)(E\\d)$", "\\1/\\2", str_to_upper(ApoE))) %>% 
+           ApoE = gsub("^(E\\d)(E\\d)$", "\\1/\\2", str_to_upper(ApoE)),
+           new_age = ifelse(is.na(birth_date),
+                            나이,
+                            floor((ymd(cancerrop_registration_date) - ymd(birth_date)) / 365))) %>% 
     left_join(key_df %>% 
                   select(patient_id, key_id),
               by = "patient_id")
 
+
+cancerrop_df <- process_master_data(cancerrop_df,
+                                 years_of_education = TRUE)
+
 master_df <- master_df %>% 
     coalesce_join(cancerrop_df, by = "key_id")
-write_excel_csv(master_df, "data/debug/dbg.csv")
 
-name_df <- data.frame(id = str_replace(
-    str_remove(list.files("data/raw/ngs_result_v2"), ".xlsx$"),
-    "_",
-    "-")) %>% 
-    mutate(id_sub = ifelse(str_length(id == 11), str_sub(id, 3, -1), id)) %>% 
-    left_join(read_csv("data/material/name.csv", col_names = FALSE) %>% 
-                  select(X1, X3) %>% 
-                  rename(id = 1, name = 2),
-              by = c("id_sub" = "id")) %>% 
-    select(-id_sub) %>% 
-    bind_rows(master_df_v2 %>% 
-                  select(id, name))
+# Add cancerrop drop column to existing drop column
+drop_cancerrop_df <- read_csv("data/material/drop.csv") %>%
+    left_join(key_df %>% 
+                  select(cancerrop_no, key_id),
+              by = "cancerrop_no") %>% 
+    mutate(drop = 1)
 
-top3b_df <- read_csv("data/ngs/top3b_v2.csv") %>% 
+master_df <- master_df%>% 
+    left_join(drop_cancerrop_df %>% 
+                  select(-cancerrop_no),
+              by = "key_id") %>% 
+    replace_na(list(drop.y = 0)) %>% 
+    mutate(drop = ifelse(drop.x == 1 | drop.y == 1, 1, 0)) %>% 
+    select(-c(drop.x, drop.y))
+
+
+# Join TOP3B columns ------------------------------------------------------
+top3b_1_1_df <- read_csv("data/ngs/top3b.csv") %>% 
     select(id, Coordinate, Variant) %>% 
-    filter(Coordinate %in% c(22312315, 22312350, 22312351) &
-               id %in% ) %>% 
+    filter(Coordinate %in% c(22312315, 22312350, 22312351)) %>% 
     mutate(Coordinate = paste0("top3b_coordinate_", Coordinate, "_variant")) %>% 
-    spread(key = Coordinate, value = Variant)
+    spread(key = Coordinate, value = Variant) %>% 
+    rename(master_no = id) %>% 
+    left_join(key_df %>% 
+                  select(master_no, key_id),
+              by = "master_no")
 
-top3b_t2_df <- read_csv("data/ngs/top3b_t2.csv") %>% 
+top3b_1_2_df <- read_csv("data/ngs/top3b_t2.csv") %>% 
+    select(id, coordinate_22312315, coordinate_22312350,
+           coordinate_22312351) %>% 
+    rename(master_no = id) %>% 
     mutate(top3b_three_snv = ifelse(
         coordinate_22312315 + coordinate_22312350 + coordinate_22312351 == 3,
         1,
         0)) %>% 
+    set_names(~ str_replace_all(., "coordinate", "top3b_coordinate")) %>% 
+    left_join(key_df %>% 
+                  select(master_no, key_id),
+              by = "master_no")
+
+top3b_2_1_df <- read_csv("data/ngs/top3b_v2.csv") %>% 
+    select(id, Coordinate, Variant) %>% 
+    filter(Coordinate %in% c(22312315, 22312350, 22312351)) %>% 
+    mutate(Coordinate = paste0("top3b_coordinate_", Coordinate, "_variant")) %>% 
+    spread(key = Coordinate, value = Variant) %>% 
+    rename(ngs_2_no = id) %>% 
+    left_join(key_df %>% 
+                  select(ngs_2_no, key_id),
+              by = "ngs_2_no")
+
+top3b_2_2_df <- read_csv("data/ngs/top3b_v2_t2.csv") %>%
     select(id, coordinate_22312315, coordinate_22312350,
-           coordinate_22312351, top3b_three_snv) %>% 
-    set_names(~ str_replace_all(., "coordinate", "top3b_coordinate"))
+           coordinate_22312351) %>% 
+    rename(ngs_2_no = id) %>% 
+    mutate(top3b_three_snv = ifelse(
+        coordinate_22312315 + coordinate_22312350 + coordinate_22312351 == 3,
+        1,
+        0)) %>% 
+    set_names(~ str_replace_all(., "coordinate", "top3b_coordinate")) %>% 
+    left_join(key_df %>% 
+                  select(ngs_2_no, key_id),
+              by = "ngs_2_no")
 
-master_df_v3 <- master_df_v2 %>% 
-    left_join(top3b_df, by = "id") %>% 
-    left_join(top3b_t2_df, by = "id")
-    
-write_excel_csv(master_df_v3, "data/debug/master_data_v3_debug.csv")
+master_df <- master_df %>% 
+    coalesce_join(top3b_1_1_df, by = "key_id") %>% 
+    coalesce_join(top3b_1_2_df, by = "key_id") %>% 
+    coalesce_join(top3b_2_1_df, by = "key_id") %>% 
+    coalesce_join(top3b_2_2_df, by = "key_id")
 
-top3b_t2_df <- read_csv("data/ngs/top3b_v2_t2.csv") %>% 
-    left_join(name_df, by = "id")
 
-apoe_t2_df <- read_csv("data/ngs/apoe_t2.csv")
+# Join APOE columns -------------------------------------------------------
+apoe_t2_df <- read_csv("data/ngs/apoe_t2.csv") %>% 
+    rename(master_no = id,
+           apoe_g_carrier = g_carrier,
+           apoe_g_hom = g_hom,
+           apoe_e4_carrier = e4_carrier,
+           apoe_e4_hom = e4_hom) %>% 
+    left_join(key_df %>% 
+                  select(master_no, key_id),
+              by = "master_no") %>% 
+    select(-c(dementia, master_no))
 
-master_df_t2 <- master_df_t2 %>% 
-    full_join(top3b_t2_df %>% 
-                  mutate(top3b_three_snv = ifelse(
-                      coordinate_22312315 + coordinate_22312350 + coordinate_22312351 == 3,
-                      1,
-                      0)) %>% 
-                  select(name, coordinate_22312315, coordinate_22312350,
-                         coordinate_22312351, top3b_three_snv) %>% 
-                  set_names(~ str_replace_all(., "coordinate", "top3b_coordinate")),
-              by = "name") %>% 
-    full_join(top3b_df, by = "name") %>% 
-    full_join(apoe_t2_df %>% 
-                  select(-dementia) %>% 
-                  rename(apoe_g_carrier = g_carrier,
-                         apoe_g_hom = g_hom,
-                         apoe_e4_carrier = e4_carrier,
-                         apoe_e4_hom = e4_hom),
-              by = "id") %>% 
-    mutate(dementia = ifelse(str_detect(id, "^P-"), 1, 0))
-# write_excel_csv(master_df_t2, "data/debug/master_data_t2_debug.csv")
+master_df <- master_df %>% 
+    full_join(apoe_t2_df,
+              by = "key_id")
 
 
 # Preprocess Karyotype Data ------------------------------------------------
-karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>% 
+karyotype_df <- read_csv("data/material/karyotype_patient.csv") %>% 
     bind_rows(read_csv("data/material/karyotype_normal.csv")) %>% 
     mutate(의뢰날짜 = ymd(의뢰날짜),
                karyotype = TRUE,
                식별코드 = str_replace(식별코드, "_", "-")) %>% 
-    select(의뢰날짜, 관리번호, 식별코드, `결과 정상=0, 염색체 (상염색체, 성염색체)이상 =1`, `성염색체 이상 =1`,
-               `Turner 45X`, XXX, `상염색체 이상`, `marker chr 이상`, `Klinefelter (XXY)`) %>% 
-    rename(registration_date = 1,
-           management_number = 2,
-           id = 3,
+    select(의뢰날짜, 관리번호, 식별코드,
+               `결과 정상=0, 염색체 (상염색체, 성염색체)이상 =1`,
+               `성염색체 이상 =1`, `Turner 45X`, XXX, `상염색체 이상`,
+               `marker chr 이상`, `Klinefelter (XXY)`, `성별/나이`) %>% 
+    rename(karyotype_registration_date = 1,
+           karyotype_no = 2,
+           master_no = 3,
            abnormal_chromosome = 4,
            abnormal_sex_chromosome = 5,
            turner = 6,
@@ -254,99 +309,50 @@ karyotype_dataframe <- read_csv("data/material/karyotype_patient.csv") %>%
            abnormal_autosome = 8,
            include_marker_chromosome = 9,
            klinefelter = 10) %>% 
+    separate(`성별/나이`, c("gender", "나이"), "/") %>% 
+    mutate(gender = recode(gender, 남 = "Male", 여 = "Female"),
+           karyotype_registration_date = as.character(karyotype_registration_date)) %>% 
     replace_na(list(abnormal_chromosome = 0,
                     abnormal_sex_chromosome = 0,
                     abnormal_autosome = 0,
                     turner = 0,
                     xxx = 0,
                     include_marker_chromosome = 0,
-                    klinefelter = 0))
+                    klinefelter = 0)) %>% 
+    left_join(key_df %>% 
+                  select(master_no, key_id),
+              by = "master_no")
 
-master_df_t2_v3 <- master_df_t2_v2_fin %>% 
-    left_join(karyotype_dataframe %>% 
-                  mutate(karyotype = TRUE,
-                         registration_date = as.character(registration_date)),
-              by = "id") %>% 
-    mutate(registration_date.x = ifelse(is.na(registration_date.x),
-                                        registration_date.y,
-                                        registration_date.x)) %>% 
-    rename(registration_date = registration_date.x) %>% 
-    select(-registration_date.y)
-
-write_excel_csv(master_df_t2_v3, "data/master_data_t2.csv")
-
-master_df_t2_v3 <- read_csv("data/master_data_t2.csv")
-master_df_t2_v3 <- read_csv("data/master_data_t2.csv")
+master_df <- master_df %>% 
+    coalesce_join(karyotype_df %>% 
+                      mutate(karyotype = TRUE),
+                  by = "key_id")
 
 
 # Preprocess 2020-09-07 Karyotype Data ------------------------------------
-master_df_t2_v4 <- coalesce_join(master_df_t2_v3,
-                                 preprocess_karyotype_data(
-                                     read_csv("data/material/karyotype_patient_20200907.csv")
-                                 ) %>% 
-                                     mutate(dementia = 1),
-                                 by = "id",
-                                 join = full_join)
+master_df <- coalesce_join(master_df,
+                     preprocess_karyotype_data(
+                         read_csv("data/material/karyotype_patient_20200907.csv")
+                     ) %>% 
+                         mutate(dementia = 1,
+                                karyotype_registration_date = as.character(karyotype_registration_date)) %>% 
+                         left_join(key_df %>% 
+                                       select(cancerrop_no, key_id),
+                                   by = "cancerrop_no"),
+                     by = "key_id")
 
-master_df_t2_v4 <- coalesce_join(master_df_t2_v4,
-                                 preprocess_karyotype_data(
-                                     read_csv("data/material/karyotype_normal_20200907.csv")
-                                 ) %>% 
-                                     mutate(dementia = 0),
-                                 by = "id",
-                                 join = full_join)
-write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
-
-
-# Generate Key Dataframe --------------------------------------------------
-key_master_df <- master_t_df %>% 
-    bind_rows(master_c_df) %>% 
-    drop_na(No) %>% 
-    select(병록번호, 이름, 성별, 생년월일, No) %>% 
-    rename(patient_id = 1, name = 2, gender = 3, birth_date = 4, master_no = 5) %>% 
-    mutate(gender = recode(gender, M = "Male", F = "Female"))
-
-key_cancerrop_df <- read_csv("data/material/cancerrop_patient.csv",
-                             col_types = cols(.default = "c")) %>% 
-    bind_rows(read_csv("data/material/cancerrop_normal.csv",
-                       col_types = cols(.default = "c")) %>% 
-                  rename(최근CT검사일 = CT검사일,
-                           최근MRI검사일 = MRI검사일)) %>% 
-    drop_na(No) %>% 
-    select(병록번호, 이름, 성별, 생년월일, No) %>% 
-    rename(patient_id = 1,
-           name = 2,
-           gender = 3,
-           birth_date = 4,
-           cancerrop_no = 5) %>% 
-    mutate(birth_date = as.character(ymd(paste0("19", birth_date))),
-           gender = recode(gender, M = "Male", F = "Female"))
-
-key_karyotype_df <- read_csv("data/material/karyotype_patient.csv") %>% 
-    bind_rows(read_csv("data/material/karyotype_normal.csv")) %>% 
-    select(`성별/나이`, 식별코드, 관리번호) %>% 
-    rename(gender = 1, 
-           master_no = 2,
-           karyotype_no = 3) %>% 
-    mutate(gender = ifelse(str_detect(gender, "^남"), "Male",
-                           ifelse(str_detect(gender, "^여"), "Female", NA)),
-           master_no = str_replace(master_no, "_", "-"))
-
-key_ngs_2_df <- read_csv("data/key/ngs_2.csv")
-
-key_df <- key_master_df %>% 
-    full_join(key_cancerrop_df, by = "patient_id") %>%
-    mutate(name = coalesce(name.x, name.y),
-           gender = coalesce(gender.x, gender.y),
-           birth_date = coalesce(birth_date.x, gender.y)) %>% 
-    select(-ends_with(".x"), -ends_with(".y")) %>% 
-    full_join(key_karyotype_df, by = "master_no") %>% 
-    mutate(gender = coalesce(gender.x, gender.y)) %>% 
-    select(-ends_with(".x"), -ends_with(".y")) %>% 
-    mutate(key_id = as.character(1:nrow(.))) %>% 
-    full_join(key_ngs_2_df, by = c("name", "gender"))
-write_excel_csv(key_df, "data/key/key.csv")
-key_df <- read_csv("data/key/key.csv")
+master_df <- coalesce_join(master_df,
+                     preprocess_karyotype_data(
+                         read_csv("data/material/karyotype_normal_20200907.csv",
+                                  col_types = cols(.default = "c"))
+                     ) %>% 
+                         mutate(dementia = 0,
+                                karyotype_registration_date = as.character(karyotype_registration_date)) %>% 
+                         left_join(key_df %>% 
+                                       select(cancerrop_no, key_id),
+                                   by = "cancerrop_no"),
+                     by = "key_id")
+write_excel_csv(master_df, paste0("data/debug/debug_", today(),".csv"))
 
 
 # Preprocess Chip Data ------------------------------------------------------
