@@ -156,7 +156,7 @@ master_df <- master_t_df %>%
     rename(master_no = No, master_registration_date = 등재일, gender = 성별, 
            birth_date = 생년월일, patient_id = 병록번호, name = 이름,
            measurement_date = 최근신경인지검사일, cdr_sob = `CDR_Sum of box`,
-           drop = 탈락여부) %>% 
+           drop = 탈락) %>% 
     left_join(key_df %>% 
                   select(patient_id, key_id),
               by = "patient_id") %>% 
@@ -352,6 +352,17 @@ master_df <- coalesce_join(master_df,
                                        select(cancerrop_no, key_id),
                                    by = "cancerrop_no"),
                      by = "key_id")
+
+
+# Relocate Columns ---------------------------------------------------------
+master_df <- master_df %>% 
+    relocate(drop) %>% 
+    relocate(patient_id, .after = drop) %>% 
+    relocate(cancerrop_no, .after = master_no) %>%
+    relocate(ngs_2_no, .after = cancerrop_no) %>% 
+    relocate(karyotype_no, .after = ngs_2_no) %>% 
+    relocate(karyotype_2_no, .after = karyotype_no)
+    
 write_excel_csv(master_df, paste0("data/debug/debug_", today(),".csv"))
 
 
