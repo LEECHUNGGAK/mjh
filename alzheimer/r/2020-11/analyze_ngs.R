@@ -143,12 +143,15 @@ for (gene_v in c("RSAD2", "AGO2", "EGFR")) {
         left_join(master_df,
                   by = "master_no")
     
-    unique_coordinate <- unique(dat$coordinate)
+    unique_coordinate <- sort(unique(dat$coordinate))
     
     for (coordinate_v in unique_coordinate) {
+        tmp <- dat %>% 
+            filter(coordinate == coordinate_v)
+        
         cat(paste0("Gene: ", gene_v, "\n",
                    "Coordinate: ", coordinate_v))
-        tab <- table(dat$dementia, dat$snv)
+        tab <- table(tmp$dementia, tmp$snv)
         print(tab)
         print(prop.table(tab) %>% round(4))
         print(chisq.test(tab))
@@ -156,3 +159,28 @@ for (gene_v in c("RSAD2", "AGO2", "EGFR")) {
 }
 sink()
 
+
+# Chi-squared Test on FMR1 and TDRD3 --------------------------------------------------------
+sink("output/2020-12/chi-squared_test/chi_squared_test_on_fmr1_and_tdrd3.txt")
+for (gene_v in c("FMR1", "TDRD3")) {
+    dat <- read_csv(file.path("data/ngs/output", paste0(gene_v, ".csv"))) %>% 
+        mutate(snv = ifelse(exonic_func == "normal", "SNV: Absence", "SNV: Presence"),
+               dementia = ifelse(dementia == 0, "Dementia: Normal", "Dementia: Patient")) %>% 
+        left_join(master_df,
+                  by = "master_no")
+    
+    unique_coordinate <- sort(unique(dat$coordinate))
+    
+    for (coordinate_v in unique_coordinate) {
+        tmp <- dat %>% 
+            filter(coordinate == coordinate_v)
+        
+        cat(paste0("Gene: ", gene_v, "\n",
+                   "Coordinate: ", coordinate_v))
+        tab <- table(tmp$dementia, tmp$snv)
+        print(tab)
+        print(prop.table(tab) %>% round(4))
+        print(chisq.test(tab))
+    }
+}
+sink()
