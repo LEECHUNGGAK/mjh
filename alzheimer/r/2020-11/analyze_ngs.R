@@ -5,6 +5,10 @@ library(hrbrthemes)
 
 setwd("C:/Users/Administrator/wd/alzheimer")
 
+master_df <- read_csv("data/debug/debug_2020-11-30.csv") %>% 
+    select(master_no, gender)
+total_df <- read_csv(file.path("data/ngs/output/total.csv"))
+unique_gene <- unique(total_df$gene)
 
 # Process NGS Data --------------------------------------------------------
 dat <- data.frame()
@@ -103,8 +107,7 @@ for (gene_v in unique_gene) {
 # Make Histogram ----------------------------------------------------------
 master_df <- read_csv("data/debug/debug_2020-11-30.csv") %>% 
     select(master_no, gender)
-
-for (gene_v in c("RSAD2", "AGO2", "TREM2")) {
+for (gene_v in unique_gene[c(3, 15, 9)]) {
     dat <- read_csv(file.path("data/ngs/output", paste0(gene_v, ".csv"))) %>% 
         left_join(master_df,
                   by = "master_no")
@@ -136,7 +139,7 @@ for (gene_v in c("RSAD2", "AGO2", "TREM2")) {
 
 # Chi-squared Test --------------------------------------------------------
 sink("output/2020-12/chi-squared_test/chi_squared_test.txt")
-for (gene_v in c("RSAD2", "AGO2", "EGFR")) {
+for (gene_v in unique_gene[c(3, 15, 9)]) {
     dat <- read_csv(file.path("data/ngs/output", paste0(gene_v, ".csv"))) %>% 
         mutate(snv = ifelse(exonic_func == "normal", "SNV: Absence", "SNV: Presence"),
                dementia = ifelse(dementia == 0, "Dementia: Normal", "Dementia: Patient")) %>% 
@@ -160,9 +163,9 @@ for (gene_v in c("RSAD2", "AGO2", "EGFR")) {
 sink()
 
 
-# Chi-squared Test on FMR1 and TDRD3 --------------------------------------------------------
+# Chi-squared Test 2 --------------------------------------------------------
 sink("output/2020-12/chi-squared_test/chi_squared_test_on_fmr1_and_tdrd3.txt")
-for (gene_v in c("FMR1", "TDRD3")) {
+for (gene_v in unique_gene[c(30, 23)]) {
     dat <- read_csv(file.path("data/ngs/output", paste0(gene_v, ".csv"))) %>% 
         mutate(snv = ifelse(exonic_func == "normal", "SNV: Absence", "SNV: Presence"),
                dementia = ifelse(dementia == 0, "Dementia: Normal", "Dementia: Patient")) %>% 
