@@ -190,32 +190,17 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv",
            ApoE = gsub("^(E\\d)(E\\d)$", "\\1/\\2", str_to_upper(ApoE)),
            new_age = ifelse(is.na(birth_date),
                             나이,
-                            floor((ymd(cancerrop_registration_date) - ymd(birth_date)) / 365))) %>% 
+                            floor((ymd(cancerrop_registration_date) - ymd(birth_date)) / 365)),
+           drop = 0) %>% 
     left_join(key_df %>% 
                   select(patient_id, key_id),
               by = "patient_id")
-
 
 cancerrop_df <- process_master_data(cancerrop_df,
                                  years_of_education = TRUE)
 
 master_df <- master_df %>% 
     coalesce_join(cancerrop_df, by = "key_id")
-
-# Add cancerrop drop column to existing drop column
-drop_cancerrop_df <- read_csv("data/material/drop.csv") %>%
-    left_join(key_df %>% 
-                  select(cancerrop_no, key_id),
-              by = "cancerrop_no") %>% 
-    mutate(drop = 1)
-
-master_df <- master_df%>% 
-    left_join(drop_cancerrop_df %>% 
-                  select(-cancerrop_no),
-              by = "key_id") %>% 
-    replace_na(list(drop.y = 0)) %>% 
-    mutate(drop = ifelse(drop.x == 1 | drop.y == 1, 1, 0)) %>% 
-    select(-c(drop.x, drop.y))
 
 
 # Join TOP3B columns ------------------------------------------------------
@@ -363,37 +348,37 @@ master_df <- master_df %>%
     relocate(karyotype_no, .after = ngs_2_no) %>% 
     relocate(karyotype_2_no, .after = karyotype_no)
     
-write_excel_csv(master_df, paste0("data/debug/debug_", today(),".csv"))
+write_excel_csv(master_df, file.path("data/output/", paste0(today(),".csv")))
 
 
 # Preprocess Chip Data ------------------------------------------------------
-chip_df <- read_csv("data/material/chip_patient.csv") %>%
-    rename(chip_abnormal_chromosome = `염색체 이상 (상염색체, 성염색체)=1`) %>% 
-    bind_rows(read_csv("data/material/chip_normal.csv") %>% 
-                  rename(chip_abnormal_chromosome = `염색체(상염색체, 성염색체) 이상 =1`)) %>%
-    mutate(식별코드 = str_replace(식별코드, "_", "-")) %>% 
-    rename(registration_date = `의뢰\n날짜`,
-           `농도 (ng/ul)` = `농도 \n(ng/ul)`,
-           `DNA농도(ng)` = `DNA농도\n(ng)`,
-           chip_abnormal_autosome = `상염색체 이상 =1`,
-           chip_abnormal_sex_chromosome = `성염색체 이상=1`,
-           management_number = 관리번호,
-           id = 식별코드) %>% 
-    replace_na(list(chip_abnormal_sex_chromosome = 0,
-                    chip_abnormal_autosome = 0,
-                    chip_abnormal_chromosome = 0)) %>% 
-    select(-c(No., 대리점, 의료기관명, 수진자명, `성별/나이`, `정상or 환자`,
-              기타기록사항))
-
-master_df_t2_v4 <- master_df_t2_v3 %>% 
-    left_join(chip_df %>% 
-                  mutate(chip = TRUE),
-              by = "id") %>% 
-    mutate(registration_date.x = ifelse(is.na(registration_date.x),
-                                        registration_date.y,
-                                        registration_date.x)) %>% 
-    rename(registration_date = registration_date.x) %>% 
-    mutate(registration_date = as.Date(registration_date, origin = "1970-01-01")) %>% 
-    select(-registration_date.y)
-
-write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
+# chip_df <- read_csv("data/material/chip_patient.csv") %>%
+#     rename(chip_abnormal_chromosome = `염색체 이상 (상염색체, 성염색체)=1`) %>% 
+#     bind_rows(read_csv("data/material/chip_normal.csv") %>% 
+#                   rename(chip_abnormal_chromosome = `염색체(상염색체, 성염색체) 이상 =1`)) %>%
+#     mutate(식별코드 = str_replace(식별코드, "_", "-")) %>% 
+#     rename(registration_date = `의뢰\n날짜`,
+#            `농도 (ng/ul)` = `농도 \n(ng/ul)`,
+#            `DNA농도(ng)` = `DNA농도\n(ng)`,
+#            chip_abnormal_autosome = `상염색체 이상 =1`,
+#            chip_abnormal_sex_chromosome = `성염색체 이상=1`,
+#            management_number = 관리번호,
+#            id = 식별코드) %>% 
+#     replace_na(list(chip_abnormal_sex_chromosome = 0,
+#                     chip_abnormal_autosome = 0,
+#                     chip_abnormal_chromosome = 0)) %>% 
+#     select(-c(No., 대리점, 의료기관명, 수진자명, `성별/나이`, `정상or 환자`,
+#               기타기록사항))
+# 
+# master_df_t2_v4 <- master_df_t2_v3 %>% 
+#     left_join(chip_df %>% 
+#                   mutate(chip = TRUE),
+#               by = "id") %>% 
+#     mutate(registration_date.x = ifelse(is.na(registration_date.x),
+#                                         registration_date.y,
+#                                         registration_date.x)) %>% 
+#     rename(registration_date = registration_date.x) %>% 
+#     mutate(registration_date = as.Date(registration_date, origin = "1970-01-01")) %>% 
+#     select(-registration_date.y)
+# 
+# write_excel_csv(master_df_t2_v4, "data/master_data_t2_v4.csv")
