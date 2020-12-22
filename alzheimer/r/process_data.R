@@ -153,7 +153,7 @@ master_df <- master_t_df %>%
            동의서취득 = str_to_lower(동의서취득),
            채혈여부 = str_to_lower(채혈여부),
            외래방문일자 = ifelse(외래방문일자 ==  "-", NA, 외래방문일자),
-           drop = ifelse(str_detect(`탈 락`, "탈 락"), 1, 0)) %>% 
+           drop = ifelse(str_detect(`탈 락`, "^탈"), 1, 0)) %>% 
     rename(master_no = No, master_registration_date = 등재일, gender = 성별, 
            birth_date = 생년월일, patient_id = 병록번호, name = 이름,
            measurement_date = 최근신경인지검사일, cdr_sob = `CDR_Sum of box`) %>% 
