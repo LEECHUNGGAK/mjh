@@ -1,4 +1,4 @@
-install.packages(c("pwr", "WebPower"))
+# install.packages(c("pwr", "WebPower"))
 
 library(pwr)
 library(WebPower)
@@ -9,7 +9,7 @@ calculate_d <- function(m1, m2, s1, s2) {
 }
 
 # One Mean T-test
-pwr.t.test(d = 0.8,
+pwr.t.test(d = 0.7 / 0.47,
            sig.level = 0.05,
            power = 0.8,
            type = "one.sample",
