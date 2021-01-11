@@ -8,7 +8,9 @@ setwd("c:/Users/Administrator/wd/statistics/psychiatry")
 process_data <- function(dat) {
     out <- dat %>% 
         filter(rowSums(!is.na(.)) > 0) %>% 
-        rename()
+        setNames(str_replace(names(.), "(^[:alpha:]+)\\d{1}$", "\\1")) %>% 
+        setNames(str_replace(names(.), "(^[:alpha:]+)\\d{1}(_\\d+$)", "\\1\\2")) %>%
+        setNames(str_replace(names(.), "(^[:alpha:]+)\\d{1}(_\\d+YN)", "\\1\\2")) %>%
     
     return(out)
 }
@@ -19,17 +21,13 @@ process_data <- function(dat) {
 raw <- read_csv("data/data.csv", col_types = cols(.default = "c"))
 
 dat1 <- raw %>% 
-    select(1:str_which(colnames(raw), "sex2")-1) %>% 
-    filter(rowSums(!is.na(.)) > 0) %>% 
-    rename()
+    select(1:str_which(colnames(raw), "sex2")-1)
 
 dat2 <- raw %>% 
-    select(str_which(colnames(raw), "sex2"):(str_which(colnames(raw), "sex3") - 1)) %>% 
-    filter(rowSums(!is.na(.)) > 0)
+    select(str_which(colnames(raw), "sex2"):(str_which(colnames(raw), "sex3") - 1))
 
 dat3 <- raw %>% 
-    select(str_which(colnames(raw), "sex3"):ncol(raw)) %>% 
-    filter(rowSums(!is.na(.)) > 0)
+    select(str_which(colnames(raw), "sex3"):ncol(raw))
 
 # ncol(raw) == ncol(dat1) + ncol(dat2) + ncol(dat3)
 
