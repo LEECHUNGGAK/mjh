@@ -2,6 +2,7 @@
 library(tidyverse)
 library(readxl)
 library(hrbrthemes)
+library(car)
 
 setwd("C:/Users/Administrator/wd/alzheimer")
 
@@ -47,9 +48,8 @@ for (gene_v in unique_gene) {
                       select(-c(Ref, func, gene)),
                   by = c("master_no", "coordinate")) %>% 
         replace_na(list(exonic_func = "normal", genotype = "homozygous wild type")) %>% 
-        mutate(genotype = recode(genotype,
-                                 hom = "homozygous mutant type",
-                                 het = "heterozygous mutant type"),
+        mutate(genotype = ifelse(genotype == "hom", "homozygous mutant type", 
+                                 ifelse(genotype == "het", "heterozygous mutant type", "homozygous wild type")),
                exonic_func = ifelse(exonic_func == ".", "intronic SNV", exonic_func),
                Alt = ifelse(exonic_func == "normal", Ref, Alt),
                dementia = ifelse(str_sub(master_no, 1, 1) == "N", 0, 1)) %>% 
@@ -62,23 +62,36 @@ for (gene_v in unique_gene) {
 
 
 # t-Test ------------------------------------------------------------------
-sink("t_test_on_snv_count.txt")
+sink("output/t_test_on_snv_count.txt")
 for (gene_v in unique_gene) {
     dat <- read_csv(file.path("data/ngs/output", paste0(gene_v, ".csv")))
     
     t_df <- dat %>% 
         group_by(master_no, dementia) %>% 
-        summarize(snv_count = sum(exonic_func != "normal"))
+        summarize(snv_count = sum(exonic_func != "normal")) %>% 
+        mutate(dementia = as.factor(dementia))
     
-    cat(paste0("Gene: ", gene_v, "\nStudent's t-Test on SNV Count"))
+    cat(paste0("Gene: ", gene_v, "\n\n"))
+    
+    l_test <- leveneTest(snv_count ~ dementia, data = t_df)
+    print(l_test)
+    
+    if (l_test$`Pr(>F)`[[1]] >= 0.05) {
+        var_equal <- TRUE
+    } else {
+        var_equal <- FALSE
+    }
+    
     print(t.test(x = t_df %>% 
                      filter(dementia == 0) %>% 
                      pull(snv_count),
                  y = t_df %>% 
                      filter(dementia == 1) %>% 
-                     pull(snv_count)))
+                     pull(snv_count),
+                 var.equal = var_equal))
     
     print(table(t_df$dementia))
+    cat("\n")
 }
 sink()
 
