@@ -201,4 +201,6 @@ dat_df = pd.read_csv("C:/Users/Administrator/wd/alzheimer/data/data_classify_wit
 features_dataframe = dat_df.drop("dementia", axis = 1)
 labels_dataframe = dat_df["dementia"]
 
-prediction_fn(features_dataframe, labels_dataframe)
+prediction_fn(features_dataframe,
+              labels_dataframe,
+              "C:/Users/Administrator/wd/alzheimer/output/ngs_")
