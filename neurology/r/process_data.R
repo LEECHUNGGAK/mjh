@@ -2,7 +2,7 @@
 library(tidyverse)
 library(lubridate)
 
-setwd("C:/Users/Administrator/wd/alzheimer")
+setwd("C:/Users/Administrator/work/alzheimer")
 
 
 # Functions -------------------------------------------
