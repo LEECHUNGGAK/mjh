@@ -7,25 +7,25 @@ setwd("C:/Users/Administrator/work/alzheimer")
 
 # Functions -------------------------------------------
 process_master_data <- function(master_data,
-                                years_of_education = FALSE) {
+                                education_year = FALSE) {
     cardiac_disease_character <- paste0(
         "심부전|협심증|부정맥|심혈관|심근경색|스탠트|스텐드|심장약|심장|MI|CAOD|PTCA|",
         "Atrial tachycardia|Cardiomegaly|AMI|HF"
     )
     # 2020-08-07: Exclude phlebemphraxis
     
-    years_of_education_df <- data.frame(
-        최종학력 = c("^무학", "^초중퇴", "^초졸", "^중중퇴", "^중졸", "^고중퇴",
-                 "^고졸", "^전문대졸", "^전대졸", "^초급대졸", "^대중퇴", "^대졸",
-                 "^대학원졸", "^석사"),
-        years_of_education = c(0, 3, 6, 7.5, 9, 10.5,
-                               12, 14, 14, 14, 14, 16,
-                               18, 18)
+    education_year_df <- data.frame(
+        education = c("^무학", "^초중퇴", "^초졸", "^중중퇴", "^중졸", "^고중퇴",
+                      "^고졸", "^전문대졸", "^전대졸", "^초급대졸", "^대중퇴", "^대졸",
+                      "^대학원졸", "^석사"),
+        education_year = as.character(c(0, 3, 6, 7.5, 9, 10.5,
+                                        12, 14, 14, 14, 14, 16,
+                                        18, 18))
     )
     
     result <- master_data %>% 
         mutate(smoking = ifelse(str_detect(흡연, "^O|^P$|Current smoker"), 1, 0),
-               family_history_of_dementia = ifelse(str_detect(치매가족력, "N|X|없음"), 0, 1),
+               family_history_dementia = ifelse(str_detect(치매가족력, "N|X|없음"), 0, 1),
                apoe_e4 = ifelse(str_detect(ApoE, "E4"), 1,
                                 ifelse(str_detect(ApoE, "ND"), NA, 0)),
                hypertension = ifelse(str_detect(병력, "고혈압|혈압약|HTN"), 1, 0),
@@ -35,26 +35,29 @@ process_master_data <- function(master_data,
                stroke = ifelse(str_detect(병력, "뇌졸중"), 1, 0))
     # 2020-08-17: Add stroke column
     
-    if (years_of_education) {
+    if (education_year) {
+        if (!("education_year" %in% colnames(result))) {
+            result <- result %>% 
+                mutate(education_year = NA_real_)
+        }
+        
         for (i in 1:nrow(result)) {
-            education <- result[[i, "최종학력"]]
-            
-            if (is.na(education)) {
-                result[i, "years_of_education"] <- NA
-            } else if (str_detect(education, "^\\d+$")) {
-                result[i, "years_of_education"] <- as.double(education)
-            } else if (!str_detect(education, "\\(") & !str_detect(education, "\\)")) {
-                result[i, "years_of_education"] <- years_of_education_df$years_of_education[
-                    str_detect(education, years_of_education_df$최종학력)
-                ]
-            } else if (str_detect(education, "\\(") & str_detect(education, "\\)")) {
-                temp_char <- str_extract(education, "\\(\\d+")
-                temp_char <- str_remove(temp_char, "\\(")
-                result[i, "years_of_education"] <- as.double(temp_char)
+            if (is.na(result[[i, "education_year"]])) {
+                
+                education <- result[[i, "최종학력"]]
+                
+                if (is.na(education)) {
+                    result[i, "education_year"] <- NA
+                } else if (str_detect(education, "^\\d+$")) {
+                    result[i, "education_year"] <- as.double(education)
+                } else {
+                    result[i, "education_year"] <- education_year_df$education_year[
+                        str_detect(education, education_year_df$education)
+                    ]
+                }
             }
         }
     }
-    
     return(result)
 }
 
@@ -140,8 +143,8 @@ master_t_df <- read_csv("data/material/master_p.csv",
 master_c_df <- read_csv("data/material/master_c.csv",
                         col_types = cols(.default = "c")) %>% 
     mutate(No = str_replace(No, "^N_", "N-"),
-           최근신경인지검사일 = `MMSE 시행날짜`)
-    
+           최근신경인지검사일 = MMSE시행날짜)
+
 
 master_df <- master_t_df %>% 
     mutate(dementia = 1) %>% 
@@ -149,14 +152,13 @@ master_df <- master_t_df %>%
                   mutate(dementia = 0)) %>% 
     mutate(master = TRUE,
            성별 = recode(성별, M = "Male", F = "Female"),
-           new_age = ifelse(is.na(생년월일), 나이, floor((ymd(등재일) - ymd(생년월일)) / 365)),
+           age_new = ifelse(is.na(생년월일), 나이, floor((ymd(등재일) - ymd(생년월일)) / 365)),
            동의서취득 = str_to_lower(동의서취득),
            채혈여부 = str_to_lower(채혈여부),
-           외래방문일자 = ifelse(외래방문일자 ==  "-", NA, 외래방문일자),
-           drop = ifelse(str_detect(`탈 락`, "^탈"), 1, 0)) %>% 
+           외래방문일자 = ifelse(외래방문일자 ==  "-", NA, 외래방문일자)) %>% 
     rename(master_no = No, master_registration_date = 등재일, gender = 성별, 
            birth_date = 생년월일, patient_id = 병록번호, name = 이름,
-           measurement_date = 최근신경인지검사일, cdr_sob = `CDR_Sum of box`) %>% 
+           measurement_date = 최근신경인지검사일, cdr_sob = CDR_Sum_of_box) %>% 
     left_join(key_df %>% 
                   select(patient_id, key_id),
               by = "patient_id") %>% 
@@ -164,7 +166,7 @@ master_df <- master_t_df %>%
     replace_na(list(drop = 0))
 
 master_df <- process_master_data(master_df,
-                                 years_of_education = TRUE)
+                                 education_year = TRUE)
 
 # Bind rows cancerrop Data
 cancerrop_df <- read_csv("data/material/cancerrop_patient.csv",
@@ -184,11 +186,11 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv",
            measurement_date = 최근신경인지검사일,
            gender = 성별,
            birth_date = 생년월일,
-           cdr_sob = `CDR_Sum of box`) %>% 
+           cdr_sob = CDR_Sum_of_box) %>% 
     mutate(birth_date = as.character(ymd(paste0("19", birth_date))),
            gender = recode(gender, M = "Male", F = "Female"),
            ApoE = gsub("^(E\\d)(E\\d)$", "\\1/\\2", str_to_upper(ApoE)),
-           new_age = ifelse(is.na(birth_date),
+           age_new = ifelse(is.na(birth_date),
                             나이,
                             floor((ymd(cancerrop_registration_date) - ymd(birth_date)) / 365)),
            drop = 0) %>% 
@@ -197,7 +199,7 @@ cancerrop_df <- read_csv("data/material/cancerrop_patient.csv",
               by = "patient_id")
 
 cancerrop_df <- process_master_data(cancerrop_df,
-                                 years_of_education = TRUE)
+                                    education_year = TRUE)
 
 master_df <- master_df %>% 
     coalesce_join(cancerrop_df, by = "key_id")
@@ -316,27 +318,27 @@ master_df <- master_df %>%
 
 # Preprocess 2020-09-07 Karyotype Data ------------------------------------
 master_df <- coalesce_join(master_df,
-                     preprocess_karyotype_data(
-                         read_csv("data/material/karyotype_patient_20200907.csv")
-                     ) %>% 
-                         mutate(dementia = 1,
-                                karyotype_registration_date = as.character(karyotype_registration_date)) %>% 
-                         left_join(key_df %>% 
-                                       select(cancerrop_no, key_id),
-                                   by = "cancerrop_no"),
-                     by = "key_id")
+                           preprocess_karyotype_data(
+                               read_csv("data/material/karyotype_patient_20200907.csv")
+                           ) %>% 
+                               mutate(dementia = 1,
+                                      karyotype_registration_date = as.character(karyotype_registration_date)) %>% 
+                               left_join(key_df %>% 
+                                             select(cancerrop_no, key_id),
+                                         by = "cancerrop_no"),
+                           by = "key_id")
 
 master_df <- coalesce_join(master_df,
-                     preprocess_karyotype_data(
-                         read_csv("data/material/karyotype_normal_20200907.csv",
-                                  col_types = cols(.default = "c"))
-                     ) %>% 
-                         mutate(dementia = 0,
-                                karyotype_registration_date = as.character(karyotype_registration_date)) %>% 
-                         left_join(key_df %>% 
-                                       select(cancerrop_no, key_id),
-                                   by = "cancerrop_no"),
-                     by = "key_id")
+                           preprocess_karyotype_data(
+                               read_csv("data/material/karyotype_normal_20200907.csv",
+                                        col_types = cols(.default = "c"))
+                           ) %>% 
+                               mutate(dementia = 0,
+                                      karyotype_registration_date = as.character(karyotype_registration_date)) %>% 
+                               left_join(key_df %>% 
+                                             select(cancerrop_no, key_id),
+                                         by = "cancerrop_no"),
+                           by = "key_id")
 
 
 # Relocate Columns ---------------------------------------------------------
@@ -347,7 +349,7 @@ master_df <- master_df %>%
     relocate(ngs_2_no, .after = cancerrop_no) %>% 
     relocate(karyotype_no, .after = ngs_2_no) %>% 
     relocate(karyotype_2_no, .after = karyotype_no)
-    
+
 write_excel_csv(master_df, file.path("data/output/", paste0(today(),".csv")))
 
 
