@@ -66,12 +66,26 @@ old <- read_csv("C:/Users/Administrator/work/alzheimer/data/output/2021-03-05.cs
            mh_C = ifelse(!is.na(cardiac_disease) & cardiac_disease == 0, 1, 
                          ifelse(!is.na(cardiac_disease) & cardiac_disease == 1, 2, 3)),
            mh_S = ifelse(!is.na(stroke) & stroke == 0, 1,
-                         ifelse(!is.na(stroke) & stroke == 1, 2, 3))) %>% 
-    select(colnames(old)[colnames(old) %in% col_names_order])
+                         ifelse(!is.na(stroke) & stroke == 1, 2, 3)),
+           동의서취득 = ifelse(
+               !is.na(동의서취득) & str_detect(동의서취득, regex("o", ignore_case = TRUE)),
+               1, 0),
+           채혈여부 = ifelse(
+               !is.na(채혈여부) & str_detect(채혈여부, regex("o", ignore_case = TRUE)),
+               1, 0),
+           음주 = ifelse(
+               !is.na(음주) & str_detect(음주, regex("^o|^p|social", ignore_case = TRUE)),
+                       1,
+               ifelse(
+                   !is.na(음주) & str_detect(음주, regex("^x|^n", ignore_case = TRUE)),
+                   0, NA))) %>% 
+    select(colnames(.)[colnames(.) %in% col_names_order], 주치의,
+           동의서취득, 채혈여부, cdr_sob, 외래방문일자, 최근CT검사일,
+           최근MRI검사일, 최근PET검사일, 음주, 맥박, 치매약물)
 
 out <- col_names_t %>% 
     bind_rows(old) %>% 
     slice(-1)
-    
+
 
 write_excel_csv(out, "debug.csv")
