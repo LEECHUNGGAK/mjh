@@ -1,0 +1,283 @@
+---
+title: "orthopedic_surgery"
+author: "LEE CHUNGGAK"
+date: '2021 3 25 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include = FALSE}
+library(tidyverse)
+library(readxl)
+library(car)
+
+setwd("C:/Users/Administrator/work/1_임상의학연구소/1_통계/orthopedic_surgery")
+
+v <- c("post_er_at_side", "post_er_90", "post_ir_90", "post_ir_back",
+       "post_er_strength", "post_ir_strength")
+
+d <- read_excel("OS 이용걸교수님 논문통계데이터.xlsx",
+                col_types = "text",
+                skip = 1) %>% 
+    rename(post_er_at_side = 27, post_er_90 = 28, post_ir_90 = 29,
+           post_ir_back = 31, post_er_strength = 32, post_ir_strength = 33,
+           sbs = 40) %>% 
+    select(sbs, all_of(v)) %>% 
+    mutate(sbs = as.factor(as.integer(sbs)),
+           post_er_at_side = as.integer(post_er_at_side),
+           post_er_90 = as.integer(post_er_90),
+           post_ir_90 = as.integer(post_ir_90),
+           post_ir_back = as.integer(post_ir_back),
+           post_er_strength = as.double(post_er_strength),
+           post_ir_strength = as.double(post_ir_strength)) %>% 
+    drop_na(sbs)
+```
+
+## Post ER at Side
+```{r include = FALSE}
+i <- "post_er_at_side"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+## Post ER 90'
+```{r include = FALSE}
+i <- "post_er_90"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+## Post IR 90'
+```{r include = FALSE}
+i <- "post_ir_90"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+## Post IR Back'
+```{r include = FALSE}
+i <- "post_ir_back"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+## Post ER Strength
+```{r include = FALSE}
+i <- "post_er_strength"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+## Post IR Strength
+```{r include = FALSE}
+i <- "post_ir_strength"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
