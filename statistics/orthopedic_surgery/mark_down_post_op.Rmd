@@ -1,0 +1,314 @@
+---
+title: "orthopedic_surgery"
+author: "LEE CHUNGGAK"
+date: '2021 4 6 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include = FALSE}
+library(tidyverse)
+library(readxl)
+library(car)
+
+setwd("C:/Users/Administrator/work/1_임상의학연구소/1_통계/orthopedic_surgery")
+
+v <- c("toilet", "post_vas_rest", "post_vas_rom", "pain", "func",
+       "active_ff", "strength_er", "satisfaction", "total")
+
+d <- read_excel("data/21.03.29 수정 SBS 논문 data.xlsx",
+                col_types = "text",
+                skip = 1) %>% 
+    rename(sbs = 40, toilet = 42, post_vas_rest = 43, post_vas_rom = 44,
+           func = 46,
+           active_ff = 47, strength_er = 48, total = 50) %>% 
+    select(sbs, all_of(v)) %>% 
+    mutate_all(as.integer) %>% 
+    mutate(sbs = as.character(sbs),
+           toilet = as.character(toilet),
+           sum_pain_func = pain + func) %>% 
+    drop_na(sbs)
+```
+
+## Toilet
+
+Cross table
+
+```{r echo = FALSE}
+t <- table(d$sbs, d$toilet)
+print(t)
+print(prop.table(t))
+```
+
+Chi-square test
+
+```{r echo = FALSE}
+print(chisq.test(t))
+```
+
+
+
+## Post VAS Rest
+
+```{r include = FALSE}
+i <- "post_vas_rest"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Jitter plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_jitter()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+
+
+## Post VAS Rom
+
+```{r include = FALSE}
+i <- "post_vas_rom"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+
+
+## Sum of Pain and Function
+
+```{r include = FALSE}
+i <- "sum_pain_func"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+
+
+## Pain
+
+```{r include = FALSE}
+i <- "pain"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+
+
+## Function
+
+```{r include = FALSE}
+i <- "func"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+
+
+## Satisfaction
+
+```{r include = FALSE}
+i <- "satisfaction"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
