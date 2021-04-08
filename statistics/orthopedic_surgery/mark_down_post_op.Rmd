@@ -1,7 +1,7 @@
 ---
 title: "orthopedic_surgery"
 author: "LEE CHUNGGAK"
-date: '2021 4 6 '
+date: '2021 4 8 '
 output: html_document
 ---
 
@@ -64,6 +64,26 @@ Jitter plot
 ggplot(data = d, aes_string(x = "sbs", y = i)) +
         geom_jitter()
 ```
+
+Frequency distribution
+
+```{r echo = FALSE, message = FALSE}
+d %>% 
+    group_by(sbs, post_vas_rest) %>% 
+    summarize(n = n()) %>% 
+    spread(post_vas_rest, n)
+```
+
+Bar plot
+
+```{r echo = FALSE}
+d %>% 
+    mutate(post_vas_rest = as.character(post_vas_rest)) %>% 
+    ggplot(aes(sbs, fill = post_vas_rest)) +
+    geom_bar(position = "fill") + 
+    coord_flip()
+```
+
 
 Quantile-quantile plot
 
