@@ -1,7 +1,7 @@
 ---
 title: "orthopedic_surgery"
 author: "LEE CHUNGGAK"
-date: '2021 4 8 '
+date: '2021 4 9 '
 output: html_document
 ---
 
@@ -24,7 +24,7 @@ d <- read_excel("data/21.03.29 수정 SBS 논문 data.xlsx",
                 skip = 1) %>% 
     rename(sbs = 40, toilet = 42, post_vas_rest = 43, post_vas_rom = 44,
            func = 46,
-           active_ff = 47, strength_er = 48, total = 50) %>% 
+           active_ff = 47, strength_er = 48, total = 51) %>% 
     select(sbs, all_of(v)) %>% 
     mutate_all(as.integer) %>% 
     mutate(sbs = as.character(sbs),
@@ -295,6 +295,50 @@ summary(aov(fml, data = d))
 
 ```{r include = FALSE}
 i <- "satisfaction"
+fml <- as.formula(paste(i, "~ sbs"))
+```
+
+Box plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(x = "sbs", y = i)) +
+        geom_boxplot()
+```
+
+Quantile-quantile plot
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(data = d, aes_string(sample = i)) +
+        geom_qq() +
+        geom_qq_line() + 
+        annotate(geom = "text", x = -Inf, y = Inf, hjust = 0, vjust = 1,
+                 label = paste0("Shapiro test p-value: ", sprintf("%0.4f", shapiro.test(pull(d, i))[["p.value"]])))
+```
+
+Levene test
+
+```{r echo = FALSE}
+leveneTest(fml, data = d)
+```
+
+Bartlett test
+
+```{r echo = FALSE}
+bartlett.test(fml, data = d)
+```
+
+AOV
+
+```{r echo = FALSE}
+summary(aov(fml, data = d))
+```
+
+
+
+## Total
+
+```{r include = FALSE}
+i <- "total"
 fml <- as.formula(paste(i, "~ sbs"))
 ```
 
